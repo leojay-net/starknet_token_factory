@@ -10,9 +10,11 @@ export default function DashboardPage() {
     const { account, address, isConnected } = useWallet()
     const { userTokens, userStats, loading, error, refresh } = useUserTokens()
 
-    const formatAddress = (addr: string | null | undefined) => {
-        if (!addr || typeof addr !== 'string') return '';
-        return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+    const formatAddress = (addr: string | null | undefined | number | bigint) => {
+        if (!addr) return '';
+        const addrStr = String(addr);
+        if (!addrStr || addrStr.length < 10) return addrStr;
+        return `${addrStr.slice(0, 6)}...${addrStr.slice(-4)}`;
     }
 
     const copyToClipboard = (text: string) => {

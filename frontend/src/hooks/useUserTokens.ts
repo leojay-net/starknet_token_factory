@@ -101,9 +101,16 @@ export function useUserTokens() {
                         return {
                             token_address: (() => {
                                 let addr = token.token_address || `0x${index}`;
+                                // Convert to string first if it's not already
+                                addr = String(addr);
                                 // Ensure address is in hex format
                                 if (!addr.startsWith('0x') && addr !== `0x${index}`) {
-                                    addr = '0x' + BigInt(addr).toString(16);
+                                    try {
+                                        addr = '0x' + BigInt(addr).toString(16);
+                                    } catch (e) {
+                                        console.warn('Could not convert address to hex:', addr, e);
+                                        addr = `0x${index}`;
+                                    }
                                 }
                                 return addr;
                             })(),

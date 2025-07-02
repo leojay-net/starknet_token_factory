@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTokenFactoryContract } from '@/lib/starknet';
+import { useWallet } from '@/contexts/WalletContext';
 
 interface TokenInfo {
     token_address: string;
@@ -18,6 +19,7 @@ interface GlobalStats {
 }
 
 export function useGlobalTokens() {
+    const { address } = useWallet();
     const [allTokens, setAllTokens] = useState<TokenInfo[]>([]);
     const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
     const [loading, setLoading] = useState(false);
@@ -25,7 +27,7 @@ export function useGlobalTokens() {
 
     useEffect(() => {
         fetchGlobalTokens();
-    }, []);
+    }, [address]);
 
     const fetchGlobalTokens = async () => {
         setLoading(true);
@@ -39,20 +41,71 @@ export function useGlobalTokens() {
             const totalCount = await contract.call('get_total_tokens_created', []);
             console.log('Total tokens created:', totalCount);
 
-            // For now, we'll return empty since we don't have a method to get all tokens
-            // In a real implementation, you'd need a contract method to get all tokens
-            // or iterate through known creators
+            let allUserTokens: TokenInfo[] = [];
 
-            setAllTokens([]);
+            // If user is connected, at least show their tokens
+            if (address) {
+                try {
+                    const userTokensRaw = await contract.call('get_created_tokens', [address]);
+                    console.log('User tokens:', userTokensRaw);
+
+                    if (Array.isArray(userTokensRaw)) {
+                        allUserTokens = userTokensRaw.map((token: any) => {
+                            console.log('Processing token:', token);
+
+                            // Handle ByteArray name and symbol
+                            let name = '';
+                            let symbol = '';
+
+                            try {
+                                if (token.name?.data?.[0]) {
+                                    name = Buffer.from(token.name.data[0].replace('0x', ''), 'hex')
+                                        .toString('utf8')
+                                        .replace(/\0/g, '');
+                                }
+
+                                if (token.symbol?.data?.[0]) {
+                                    symbol = Buffer.from(token.symbol.data[0].replace('0x', ''), 'hex')
+                                        .toString('utf8')
+                                        .replace(/\0/g, '');
+                                }
+                            } catch (parseError) {
+                                console.warn('Error parsing name/symbol:', parseError);
+                                name = 'Unknown';
+                                symbol = 'UNK';
+                            }
+
+                            // Ensure token address is in hex format
+                            let tokenAddress = token.token_address || '';
+                            if (tokenAddress && !tokenAddress.startsWith('0x')) {
+                                tokenAddress = '0x' + BigInt(tokenAddress).toString(16);
+                            }
+
+                            return {
+                                token_address: tokenAddress,
+                                token_type: parseInt(token.token_type?.toString() || '0'),
+                                name,
+                                symbol,
+                                created_at: token.created_at?.toString() || Date.now().toString()
+                            };
+                        });
+                    }
+                } catch (userTokensError) {
+                    console.warn('Error fetching user tokens:', userTokensError);
+                }
+            }
+
+            setAllTokens(allUserTokens);
 
             const stats: GlobalStats = {
                 total_tokens: parseInt(totalCount.toString()),
-                total_erc20: 0, // Would need to calculate from actual data
-                total_erc721: 0, // Would need to calculate from actual data
-                total_transactions: 0, // Would need event indexing
-                active_users: 0 // Would need to track unique creators
+                total_erc20: allUserTokens.filter(t => t.token_type === 0).length,
+                total_erc721: allUserTokens.filter(t => t.token_type === 1).length,
+                total_transactions: allUserTokens.length, // Each token creation is a transaction
+                active_users: address ? 1 : 0 // We can only count the current user
             };
 
+            console.log('Calculated stats:', stats);
             setGlobalStats(stats);
 
         } catch (err: any) {

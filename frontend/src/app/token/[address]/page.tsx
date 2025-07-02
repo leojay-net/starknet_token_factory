@@ -47,8 +47,11 @@ export default function TokenPage() {
         }
     }
 
-    const formatAddress = (addr: string) =>
-        `${addr.slice(0, 6)}...${addr.slice(-6)}`
+    const formatAddress = (addr: string | number | bigint) => {
+        const addrStr = String(addr);
+        if (!addrStr || addrStr.length < 10) return addrStr;
+        return `${addrStr.slice(0, 6)}...${addrStr.slice(-6)}`;
+    }
 
     const formatAmount = (amount: string, decimals: number = 18) => {
         const value = parseFloat(amount) / Math.pow(10, decimals)

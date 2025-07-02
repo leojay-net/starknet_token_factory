@@ -14,14 +14,16 @@ import {
     ArrowUpRight,
     Filter,
     Calendar,
-    BarChart3
+    BarChart3,
+    Info
 } from 'lucide-react'
 import Link from 'next/link'
 import { useGlobalTokens } from '@/hooks/useGlobalTokens'
-import { ContractDebugger } from '@/components/ContractDebugger'
+import { useWallet } from '@/contexts/WalletContext'
 
 export default function ExplorerPage() {
     const { allTokens, globalStats, loading, error } = useGlobalTokens()
+    const { isConnected, connect } = useWallet()
     const [filteredTokens, setFilteredTokens] = useState(allTokens)
     const [searchQuery, setSearchQuery] = useState('')
     const [activeFilter, setActiveFilter] = useState<'all' | 'erc20' | 'erc721'>('all')
@@ -52,8 +54,11 @@ export default function ExplorerPage() {
         setFilteredTokens(filtered)
     }
 
-    const formatAddress = (addr: string) =>
-        `${addr.slice(0, 6)}...${addr.slice(-6)}`
+    const formatAddress = (addr: string | number | bigint) => {
+        const addrStr = String(addr);
+        if (!addrStr || addrStr.length < 10) return addrStr;
+        return `${addrStr.slice(0, 6)}...${addrStr.slice(-6)}`;
+    }
 
     const formatDate = (timestamp: number) =>
         new Date(timestamp * 1000).toLocaleDateString()
@@ -74,9 +79,6 @@ export default function ExplorerPage() {
                     Discover and explore all tokens created on the Token Factory platform.
                 </p>
             </div>
-
-            {/* Debug Panel - Remove this in production */}
-            <ContractDebugger />
 
             {/* Global Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
@@ -203,6 +205,28 @@ export default function ExplorerPage() {
                 </CardContent>
             </Card>
 
+            {/* Information Card */}
+            {!isConnected && (
+                <Card className="mb-8 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:border-blue-800">
+                    <CardContent className="p-6">
+                        <div className="flex items-start space-x-3">
+                            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                            <div>
+                                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                                    Connect Your Wallet to See More Tokens
+                                </h3>
+                                <p className="text-blue-800 dark:text-blue-200 text-sm mb-4">
+                                    Currently showing limited data. Connect your wallet to see tokens you've created and get accurate statistics.
+                                </p>
+                                <Button onClick={connect} size="sm" className="bg-blue-600 hover:bg-blue-700">
+                                    Connect Wallet
+                                </Button>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Tokens List */}
             <Card>
                 <CardHeader>
@@ -225,11 +249,26 @@ export default function ExplorerPage() {
                                 <Search className="h-8 w-8 text-slate-400" />
                             </div>
                             <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                                No tokens found
+                                {!isConnected ? 'No tokens visible' : 'No tokens found'}
                             </h3>
-                            <p className="text-slate-600 dark:text-slate-400">
-                                Try adjusting your search criteria or filters.
+                            <p className="text-slate-600 dark:text-slate-400 mb-4">
+                                {!isConnected
+                                    ? 'Connect your wallet to see tokens you\'ve created, or create your first token to get started.'
+                                    : 'Try adjusting your search criteria or filters, or create your first token.'
+                                }
                             </p>
+                            <div className="space-x-2">
+                                {!isConnected && (
+                                    <Button onClick={connect} variant="outline" size="sm">
+                                        Connect Wallet
+                                    </Button>
+                                )}
+                                <Link href="/create">
+                                    <Button size="sm">
+                                        Create Token
+                                    </Button>
+                                </Link>
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
