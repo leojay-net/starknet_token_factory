@@ -6,16 +6,21 @@ export interface TokenInfo {
     created_at: number;
 }
 
-export interface ERC20TokenData extends TokenInfo {
+export interface ERC20TokenData {
+    address: string;
+    type: 'ERC20';
+    name: string;
+    symbol: string;
     decimals: number;
-    total_supply: string;
-    balance?: string;
+    totalSupply: bigint;
 }
 
-export interface ERC721TokenData extends TokenInfo {
-    base_uri: string;
-    total_supply: number;
-    owned_tokens?: string[];
+export interface ERC721TokenData {
+    address: string;
+    type: 'ERC721';
+    name: string;
+    symbol: string;
+    baseUri: string;
 }
 
 export interface TokenTransaction {

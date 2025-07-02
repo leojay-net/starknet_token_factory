@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useAccount } from '@starknet-react/core'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/textarea'

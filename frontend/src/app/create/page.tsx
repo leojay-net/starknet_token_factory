@@ -1,16 +1,18 @@
 'use client'
 
 import React, { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useWallet } from '@/contexts/WalletContext'
 import { Coins, Image, ArrowRight, Loader2 } from 'lucide-react'
 import { CreateTokenFormData } from '@/types'
-import { getTokenFactoryContract, bigIntToU256, encodeByteArrayForCallData } from '@/lib/starknet'
+import { getTokenFactoryContract, bigIntToU256, encodeByteArrayForCallData, extractTokenAddressFromReceipt, provider } from '@/lib/starknet'
 import { useToast } from '@/components/ui/toaster'
 import { CallData } from 'starknet'
 
 export default function CreatePage() {
     const { account, address, isConnected } = useWallet()
     const { addToast } = useToast()
+    const router = useRouter()
     const [selectedType, setSelectedType] = useState<'erc20' | 'erc721' | null>(null)
     const [isCreating, setIsCreating] = useState(false)
     const [formData, setFormData] = useState<CreateTokenFormData>({
@@ -36,6 +38,7 @@ export default function CreatePage() {
         setIsCreating(true)
         try {
             const contract = getTokenFactoryContract(account)
+            let result
 
             if (formData.type === 'erc20') {
                 // Create ERC20 token
@@ -49,12 +52,8 @@ export default function CreatePage() {
                     decimals: formData.decimals,
                     initial_supply: initialSupplyU256
                 })
-                const result = await contract.invoke('create_erc20', calldata)
+                result = await contract.invoke('create_erc20', calldata)
                 console.log('ERC20 token created:', result)
-                addToast({
-                    title: 'Success!',
-                    description: `ERC20 token "${formData.name}" (${formData.symbol}) has been created successfully!`,
-                })
             } else {
                 // Create ERC721 token
                 if (!formData.base_uri) {
@@ -65,13 +64,60 @@ export default function CreatePage() {
                     symbol: encodeByteArrayForCallData(formData.symbol),
                     base_uri: encodeByteArrayForCallData(formData.base_uri)
                 })
-                const result = await contract.invoke('create_erc721', calldata)
+                result = await contract.invoke('create_erc721', calldata)
                 console.log('ERC721 token created:', result)
-                addToast({
-                    title: 'Success!',
-                    description: `ERC721 collection "${formData.name}" (${formData.symbol}) has been created successfully!`,
-                })
             }
+
+            // Wait for transaction confirmation and get receipt
+            const receipt = await provider.waitForTransaction(result.transaction_hash)
+            console.log('Transaction receipt:', receipt)
+
+            // Extract token address from receipt
+            let tokenAddress = extractTokenAddressFromReceipt(receipt)
+            console.log('Extracted token address:', tokenAddress)
+
+            // If we couldn't extract from receipt, try to get the latest token for this user
+            if (!tokenAddress && address) {
+                try {
+                    console.log('Attempting to fetch latest token for user...');
+                    const contract = getTokenFactoryContract();
+                    const userTokens = await contract.call('get_created_tokens', [address]);
+                    console.log('User tokens after creation:', userTokens);
+
+                    if (Array.isArray(userTokens) && userTokens.length > 0) {
+                        // Get the last (most recent) token
+                        const latestToken = userTokens[userTokens.length - 1];
+                        tokenAddress = latestToken.token_address;
+                        console.log('Found latest token address:', tokenAddress);
+                    }
+                } catch (fallbackError) {
+                    console.warn('Fallback token address extraction failed:', fallbackError);
+                }
+            }
+
+            addToast({
+                title: 'Success!',
+                description: `${formData.type.toUpperCase()} token "${formData.name}" (${formData.symbol}) has been created successfully!`,
+            })
+
+            // Redirect to token page if we have the address, otherwise to dashboard
+            if (tokenAddress) {
+                // Ensure token address is in hex format for the URL
+                let hexTokenAddress = tokenAddress;
+                if (!tokenAddress.startsWith('0x')) {
+                    hexTokenAddress = '0x' + BigInt(tokenAddress).toString(16);
+                }
+                console.log('Redirecting to token page with address:', hexTokenAddress);
+
+                setTimeout(() => {
+                    router.push(`/token/${hexTokenAddress}`)
+                }, 1500) // Small delay to show the success toast
+            } else {
+                setTimeout(() => {
+                    router.push('/dashboard')
+                }, 1500)
+            }
+
         } catch (error) {
             console.error('Error creating token:', error)
             addToast({

@@ -2,13 +2,13 @@
 
 import React from 'react'
 import { useWallet } from '@/contexts/WalletContext'
-import { Coins, Image, TrendingUp, Users, ArrowUpRight, Copy, ExternalLink } from 'lucide-react'
+import { Coins, Image, TrendingUp, Users, ArrowUpRight, Copy, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useUserTokens } from '@/hooks/useUserTokens'
 
 export default function DashboardPage() {
     const { account, address, isConnected } = useWallet()
-    const { userTokens, userStats, loading, error } = useUserTokens()
+    const { userTokens, userStats, loading, error, refresh } = useUserTokens()
 
     const formatAddress = (addr: string | null | undefined) => {
         if (!addr || typeof addr !== 'string') return '';
@@ -54,9 +54,19 @@ export default function DashboardPage() {
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
                 <div className="mb-12">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
-                        Your Dashboard
-                    </h1>
+                    <div className="flex items-center justify-between mb-4">
+                        <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
+                            Your Dashboard
+                        </h1>
+                        <button
+                            onClick={refresh}
+                            disabled={loading}
+                            className="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300 disabled:opacity-50"
+                        >
+                            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                            Refresh
+                        </button>
+                    </div>
                     <div className="flex items-center space-x-4 text-slate-600 dark:text-slate-300">
                         <span>Wallet: {formatAddress(address || '')}</span>
                         <button
@@ -112,6 +122,14 @@ export default function DashboardPage() {
                         <ExternalLink className="w-5 h-5 mr-2" />
                         Explore All Tokens
                     </Link>
+                    <button
+                        onClick={refresh}
+                        disabled={loading}
+                        className="inline-flex items-center px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300 disabled:opacity-50"
+                    >
+                        <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh Data
+                    </button>
                 </div>
 
                 {/* Tokens List */}

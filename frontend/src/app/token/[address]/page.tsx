@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -78,6 +78,29 @@ export default function TokenPage() {
         )
     }
 
+    if (error) {
+        return (
+            <div className="container mx-auto px-4 py-8">
+                <div className="text-center py-20">
+                    <h1 className="text-2xl font-bold text-red-600 mb-4">
+                        Error Loading Token
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-400 mb-8">
+                        {error}
+                    </p>
+                    <div className="space-x-4">
+                        <Link href="/dashboard">
+                            <Button variant="outline">Go to Dashboard</Button>
+                        </Link>
+                        <Link href="/explorer">
+                            <Button>Browse All Tokens</Button>
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     if (!tokenData) {
         return (
             <div className="container mx-auto px-4 py-8">
@@ -96,7 +119,7 @@ export default function TokenPage() {
         )
     }
 
-    const isERC20 = tokenData.token_type === 0
+    const isERC20 = tokenData.type === 'ERC20'
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -141,16 +164,16 @@ export default function TokenPage() {
                                     </span>
                                     <div className="flex items-center space-x-2">
                                         <code className="text-sm font-mono text-slate-900 dark:text-white">
-                                            {formatAddress(tokenData.token_address)}
+                                            {formatAddress(tokenData.address)}
                                         </code>
                                         <button
-                                            onClick={() => copyToClipboard(tokenData.token_address)}
+                                            onClick={() => copyToClipboard(tokenData.address)}
                                             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
                                         >
                                             <Copy className="h-4 w-4" />
                                         </button>
                                         <a
-                                            href={`https://sepolia.starkscan.co/contract/${tokenData.token_address}`}
+                                            href={`https://sepolia.starkscan.co/contract/${tokenData.address}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
                                             className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
@@ -162,31 +185,31 @@ export default function TokenPage() {
 
                                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                     <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                        Created
+                                        Token Type
                                     </span>
                                     <span className="text-sm text-slate-900 dark:text-white">
-                                        {formatDate(tokenData.created_at)}
+                                        {isERC20 ? 'ERC20 (Fungible)' : 'ERC721 (NFT)'}
                                     </span>
                                 </div>
 
-                                {isERC20 && 'decimals' in tokenData && (
+                                {isERC20 && tokenData.type === 'ERC20' && (
                                     <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                                             Decimals
                                         </span>
                                         <span className="text-sm text-slate-900 dark:text-white">
-                                            {tokenData.decimals}
+                                            {(tokenData as ERC20TokenData).decimals}
                                         </span>
                                     </div>
                                 )}
 
-                                {!isERC20 && 'base_uri' in tokenData && (
+                                {!isERC20 && tokenData.type === 'ERC721' && (
                                     <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
                                         <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
                                             Base URI
                                         </span>
                                         <code className="text-sm font-mono text-slate-900 dark:text-white">
-                                            {tokenData.base_uri}
+                                            {(tokenData as ERC721TokenData).baseUri || 'Not available'}
                                         </code>
                                     </div>
                                 )}
@@ -204,31 +227,17 @@ export default function TokenPage() {
                                     Total Supply
                                 </h3>
                                 <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                                    {isERC20 && 'decimals' in tokenData
-                                        ? formatAmount(tokenData.total_supply.toString(), tokenData.decimals)
-                                        : 'total_supply' in tokenData
-                                            ? tokenData.total_supply
-                                            : '0'
-                                    }
+                                    {(() => {
+                                        if (tokenData.type === 'ERC20') {
+                                            const erc20Data = tokenData as ERC20TokenData;
+                                            return formatAmount(erc20Data.totalSupply.toString(), erc20Data.decimals);
+                                        }
+                                        return 'N/A';
+                                    })()}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
-
-                    {isERC20 && 'balance' in tokenData && tokenData.balance && (
-                        <Card>
-                            <CardContent className="p-6">
-                                <div className="text-center">
-                                    <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
-                                        Your Balance
-                                    </h3>
-                                    <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                        {formatAmount(tokenData.balance, tokenData.decimals)}
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
 
                     <Card>
                         <CardContent className="p-6">
@@ -286,8 +295,8 @@ export default function TokenPage() {
                                     </div>
                                     <div className="text-right">
                                         <div className="text-sm font-medium text-slate-900 dark:text-white">
-                                            {tx.amount
-                                                ? `${formatAmount(tx.amount, isERC20 && 'decimals' in tokenData ? tokenData.decimals : 18)} ${tokenData.symbol}`
+                                            {tx.amount && tokenData.type === 'ERC20'
+                                                ? `${formatAmount(tx.amount, (tokenData as ERC20TokenData).decimals)} ${tokenData.symbol}`
                                                 : `Token #${tx.token_id}`
                                             }
                                         </div>

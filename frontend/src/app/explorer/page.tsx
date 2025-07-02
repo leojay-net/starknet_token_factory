@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
+import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -17,7 +17,7 @@ import {
     BarChart3
 } from 'lucide-react'
 import Link from 'next/link'
-import { useGlobalTokens } from '@/hooks/useTokenFactory'
+import { useGlobalTokens } from '@/hooks/useGlobalTokens'
 import { ContractDebugger } from '@/components/ContractDebugger'
 
 export default function ExplorerPage() {
@@ -266,7 +266,7 @@ export default function ExplorerPage() {
                                                 Created
                                             </p>
                                             <p className="text-sm font-medium text-slate-900 dark:text-white">
-                                                {formatDate(token.created_at)}
+                                                {formatDate(parseInt(token.created_at))}
                                             </p>
                                         </div>
                                         <Link

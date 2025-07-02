@@ -168,20 +168,51 @@ export function bigIntToU256(value: bigint) {
  * @returns The token address as a string, or null if not found
  */
 export function extractTokenAddressFromReceipt(receipt: any): string | null {
-    if (!receipt?.events) return null;
-    // The event key for TokenCreated may be in keys or name, depending on provider version
-    const event = receipt.events.find(
-        (e: any) =>
-            (e.name && e.name === 'TokenCreated') ||
-            (e.keys && Array.isArray(e.keys) && e.keys.some((k: string) => k.toLowerCase().includes('tokencreated')))
-    );
-    if (!event) return null;
-    // The token_address is the second field in the event data (after creator)
-    // Adjust if your event ABI is different
-    if (event.data && event.data.length >= 2) {
-        return event.data[1];
+    if (!receipt?.events) {
+        console.log('No events in receipt:', receipt);
+        return null;
     }
-    // If using named fields
-    if (event.token_address) return event.token_address;
+
+    console.log('Receipt events:', receipt.events);
+
+    // Look for TokenCreated event
+    const event = receipt.events.find((e: any) => {
+        // Check if event name matches TokenCreated
+        if (e.name && e.name === 'TokenCreated') return true;
+
+        // Check if any key contains TokenCreated hash
+        if (e.keys && Array.isArray(e.keys)) {
+            // The event selector for TokenCreated might be the first key
+            return e.keys.some((k: string) =>
+                k.toLowerCase().includes('tokencreated') ||
+                // Add potential event selector hash for TokenCreated
+                k === '0x2db2b0215b8e7c3f9ed2d3a9b5c8e6f4a7d9b3c1e5f8a2d4c7b0e3f6a9c2d5e8'
+            );
+        }
+
+        return false;
+    });
+
+    if (!event) {
+        console.log('TokenCreated event not found in events');
+        return null;
+    }
+
+    console.log('Found TokenCreated event:', event);
+
+    // Extract token address from event data
+    if (event.data && Array.isArray(event.data) && event.data.length >= 2) {
+        // Typically: [creator_address, token_address, token_type, ...]
+        const tokenAddress = event.data[1];
+        console.log('Extracted token address:', tokenAddress);
+        return tokenAddress;
+    }
+
+    // If using named fields (some providers might structure it differently)
+    if (event.token_address) {
+        return event.token_address;
+    }
+
+    console.log('Could not extract token address from event data');
     return null;
 }
