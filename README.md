@@ -104,9 +104,6 @@ fn get_next_token_id(self: @TContractState) -> u256
 
 ## Installation and Setup
 
-### Prerequisites
-
-- [Scarb](https://docs.swmansion.com/scarb/) (Cairo package manager)
 - [Starknet Foundry](https://foundry-rs.github.io/starknet-foundry/) (Testing framework)
 
 ### Installation
