@@ -1,368 +1,287 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
-import { Search, Filter, ExternalLink, Coins, Image as ImageIcon, TrendingUp, Activity } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Input, Select } from '@/components/ui/Input'
-import Button from '@/components/ui/Button'
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+    Search,
+    Coins,
+    Palette,
+    TrendingUp,
+    Users,
+    ArrowUpRight,
+    Filter,
+    Calendar,
+    BarChart3
+} from 'lucide-react'
 import Link from 'next/link'
-import { formatAddress, formatNumber } from '@/lib/utils'
-import { TokenInfo } from '@/types'
+import { useGlobalTokens } from '@/hooks/useTokenFactory'
+import { ContractDebugger } from '@/components/ContractDebugger'
 
-interface ExplorerStats {
-    totalTokens: number
-    totalERC20: number
-    totalERC721: number
-    totalTransactions: number
-    totalCreators: number
-}
-
-interface TokenWithStats extends TokenInfo {
-    totalSupply?: string
-    holders?: number
-    transactions?: number
-    volume24h?: string
-    creator?: string
-}
-
-const ExplorerPage: React.FC = () => {
+export default function ExplorerPage() {
+    const { allTokens, globalStats, loading, error } = useGlobalTokens()
+    const [filteredTokens, setFilteredTokens] = useState(allTokens)
     const [searchQuery, setSearchQuery] = useState('')
-    const [filterType, setFilterType] = useState('all')
-    const [sortBy, setSortBy] = useState('newest')
-    const [stats, setStats] = useState<ExplorerStats | null>(null)
-    const [tokens, setTokens] = useState<TokenWithStats[]>([])
-    const [loading, setLoading] = useState(true)
+    const [activeFilter, setActiveFilter] = useState<'all' | 'erc20' | 'erc721'>('all')
 
-    const filterOptions = [
-        { value: 'all', label: 'All Tokens' },
-        { value: 'erc20', label: 'ERC20 Tokens' },
-        { value: 'erc721', label: 'ERC721 Collections' }
-    ]
-
-    const sortOptions = [
-        { value: 'newest', label: 'Newest First' },
-        { value: 'oldest', label: 'Oldest First' },
-        { value: 'transactions', label: 'Most Transactions' },
-        { value: 'holders', label: 'Most Holders' },
-        { value: 'volume', label: 'Highest Volume' }
-    ]
-
-    // Mock data - replace with actual API calls
     useEffect(() => {
-        setTimeout(() => {
-            setStats({
-                totalTokens: 12567,
-                totalERC20: 8934,
-                totalERC721: 3633,
-                totalTransactions: 1_234_567,
-                totalCreators: 4521
-            })
+        filterTokens()
+    }, [searchQuery, activeFilter, allTokens])
 
-            setTokens([
-                {
-                    token_address: '0x1234567890abcdef1234567890abcdef12345678',
-                    token_type: 0,
-                    name: 'Starknet Token',
-                    symbol: 'STRK',
-                    created_at: Date.now() - 86400000,
-                    totalSupply: '10000000000000000000000000',
-                    holders: 12543,
-                    transactions: 89234,
-                    volume24h: '1234567',
-                    creator: '0xabcd...1234'
-                },
-                {
-                    token_address: '0xabcdef1234567890abcdef1234567890abcdef12',
-                    token_type: 1,
-                    name: 'Starknet Punks',
-                    symbol: 'SPUNK',
-                    created_at: Date.now() - 172800000,
-                    totalSupply: '10000',
-                    holders: 3421,
-                    transactions: 15678,
-                    volume24h: '567890',
-                    creator: '0x1234...abcd'
-                },
-                {
-                    token_address: '0x567890abcdef1234567890abcdef1234567890ab',
-                    token_type: 0,
-                    name: 'Cairo Coin',
-                    symbol: 'CAIRO',
-                    created_at: Date.now() - 259200000,
-                    totalSupply: '1000000000000000000000000',
-                    holders: 8765,
-                    transactions: 45123,
-                    volume24h: '345678',
-                    creator: '0x5678...cdef'
-                }
-            ])
-            setLoading(false)
-        }, 1000)
-    }, [])
+    const filterTokens = () => {
+        let filtered = allTokens
 
-    const filteredTokens = tokens.filter(token => {
-        const matchesSearch = token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            token.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            token.token_address.toLowerCase().includes(searchQuery.toLowerCase())
-
-        const matchesFilter = filterType === 'all' ||
-            (filterType === 'erc20' && token.token_type === 0) ||
-            (filterType === 'erc721' && token.token_type === 1)
-
-        return matchesSearch && matchesFilter
-    })
-
-    const sortedTokens = [...filteredTokens].sort((a, b) => {
-        switch (sortBy) {
-            case 'newest':
-                return b.created_at - a.created_at
-            case 'oldest':
-                return a.created_at - b.created_at
-            case 'transactions':
-                return (b.transactions || 0) - (a.transactions || 0)
-            case 'holders':
-                return (b.holders || 0) - (a.holders || 0)
-            case 'volume':
-                return parseFloat(b.volume24h || '0') - parseFloat(a.volume24h || '0')
-            default:
-                return 0
+        // Filter by type
+        if (activeFilter === 'erc20') {
+            filtered = filtered.filter(token => token.token_type === 0)
+        } else if (activeFilter === 'erc721') {
+            filtered = filtered.filter(token => token.token_type === 1)
         }
-    })
 
-    if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#4E3F95]"></div>
-            </div>
-        )
+        // Filter by search query
+        if (searchQuery) {
+            filtered = filtered.filter(token =>
+                token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                token.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                token.token_address.toLowerCase().includes(searchQuery.toLowerCase())
+            )
+        }
+
+        setFilteredTokens(filtered)
+    }
+
+    const formatAddress = (addr: string) =>
+        `${addr.slice(0, 6)}...${addr.slice(-6)}`
+
+    const formatDate = (timestamp: number) =>
+        new Date(timestamp * 1000).toLocaleDateString()
+
+    const formatNumber = (num: number) => {
+        if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+        if (num >= 1000) return `${(num / 1000).toFixed(1)}K`
+        return num.toString()
     }
 
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-            {/* Header */}
-            <div className="text-center">
-                <h1 className="text-3xl font-bold text-gray-900 mb-4">Token Explorer</h1>
-                <p className="text-gray-600 max-w-2xl mx-auto">
-                    Discover all tokens created through Token Factory. Track their performance,
-                    view transaction history, and explore the growing ecosystem.
+        <div className="container mx-auto px-4 py-8">
+            <div className="mb-8">
+                <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
+                    Token Explorer
+                </h1>
+                <p className="text-lg text-slate-600 dark:text-slate-300">
+                    Discover and explore all tokens created on the Token Factory platform.
                 </p>
             </div>
 
-            {/* Stats Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+            {/* Debug Panel - Remove this in production */}
+            <ContractDebugger />
+
+            {/* Global Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
                 <Card>
-                    <CardContent className="text-center p-6">
-                        <div className="text-2xl font-bold text-[#4E3F95] mb-2">
-                            {formatNumber(stats?.totalTokens || 0)}
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                    Total Tokens
+                                </p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    {formatNumber(globalStats?.total_tokens || 0)}
+                                </p>
+                            </div>
+                            <Coins className="h-6 w-6 text-blue-600" />
                         </div>
-                        <div className="text-sm text-gray-600">Total Tokens</div>
                     </CardContent>
                 </Card>
 
                 <Card>
-                    <CardContent className="text-center p-6">
-                        <div className="text-2xl font-bold text-blue-600 mb-2">
-                            {formatNumber(stats?.totalERC20 || 0)}
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                    ERC20 Tokens
+                                </p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    {formatNumber(globalStats?.total_erc20 || 0)}
+                                </p>
+                            </div>
+                            <TrendingUp className="h-6 w-6 text-green-600" />
                         </div>
-                        <div className="text-sm text-gray-600">ERC20 Tokens</div>
                     </CardContent>
                 </Card>
 
                 <Card>
-                    <CardContent className="text-center p-6">
-                        <div className="text-2xl font-bold text-purple-600 mb-2">
-                            {formatNumber(stats?.totalERC721 || 0)}
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                    NFT Collections
+                                </p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    {formatNumber(globalStats?.total_erc721 || 0)}
+                                </p>
+                            </div>
+                            <Palette className="h-6 w-6 text-purple-600" />
                         </div>
-                        <div className="text-sm text-gray-600">NFT Collections</div>
                     </CardContent>
                 </Card>
 
                 <Card>
-                    <CardContent className="text-center p-6">
-                        <div className="text-2xl font-bold text-green-600 mb-2">
-                            {formatNumber(stats?.totalTransactions || 0)}
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                    Transactions
+                                </p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    {formatNumber(globalStats?.total_transactions || 0)}
+                                </p>
+                            </div>
+                            <BarChart3 className="h-6 w-6 text-orange-600" />
                         </div>
-                        <div className="text-sm text-gray-600">Transactions</div>
                     </CardContent>
                 </Card>
 
                 <Card>
-                    <CardContent className="text-center p-6">
-                        <div className="text-2xl font-bold text-orange-600 mb-2">
-                            {formatNumber(stats?.totalCreators || 0)}
+                    <CardContent className="p-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                    Active Users
+                                </p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                    {formatNumber(globalStats?.active_users || 0)}
+                                </p>
+                            </div>
+                            <Users className="h-6 w-6 text-indigo-600" />
                         </div>
-                        <div className="text-sm text-gray-600">Creators</div>
                     </CardContent>
                 </Card>
             </div>
 
             {/* Search and Filters */}
-            <Card>
+            <Card className="mb-8">
                 <CardContent className="p-6">
                     <div className="flex flex-col lg:flex-row gap-4">
                         <div className="flex-1">
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                                <input
-                                    type="text"
-                                    placeholder="Search by name, symbol, or address..."
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <Input
+                                    placeholder="Search tokens by name, symbol, or address..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4E3F95] focus:border-[#4E3F95]"
+                                    className="pl-10"
                                 />
                             </div>
                         </div>
-
-                        <div className="flex gap-4">
-                            <Select
-                                value={filterType}
-                                onChange={(e) => setFilterType(e.target.value)}
-                                options={filterOptions}
-                                className="min-w-[140px]"
-                            />
-
-                            <Select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                options={sortOptions}
-                                className="min-w-[140px]"
-                            />
+                        <div className="flex gap-2">
+                            <Button
+                                variant={activeFilter === 'all' ? 'default' : 'outline'}
+                                onClick={() => setActiveFilter('all')}
+                                size="sm"
+                            >
+                                All Tokens
+                            </Button>
+                            <Button
+                                variant={activeFilter === 'erc20' ? 'default' : 'outline'}
+                                onClick={() => setActiveFilter('erc20')}
+                                size="sm"
+                            >
+                                ERC20
+                            </Button>
+                            <Button
+                                variant={activeFilter === 'erc721' ? 'default' : 'outline'}
+                                onClick={() => setActiveFilter('erc721')}
+                                size="sm"
+                            >
+                                ERC721
+                            </Button>
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            {/* Token List */}
+            {/* Tokens List */}
             <Card>
                 <CardHeader>
-                    <CardTitle>
-                        Tokens ({sortedTokens.length})
-                    </CardTitle>
+                    <CardTitle>All Tokens</CardTitle>
+                    <CardDescription>
+                        {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''} found
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {sortedTokens.length > 0 ? (
+                    {loading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <div className="text-center">
+                                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                                <p className="text-slate-600 dark:text-slate-400">Loading tokens...</p>
+                            </div>
+                        </div>
+                    ) : filteredTokens.length === 0 ? (
+                        <div className="text-center py-12">
+                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <Search className="h-8 w-8 text-slate-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                                No tokens found
+                            </h3>
+                            <p className="text-slate-600 dark:text-slate-400">
+                                Try adjusting your search criteria or filters.
+                            </p>
+                        </div>
+                    ) : (
                         <div className="space-y-4">
-                            {sortedTokens.map((token, index) => (
+                            {filteredTokens.map((token, index) => (
                                 <div
                                     key={index}
-                                    className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                    className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                                 >
                                     <div className="flex items-center space-x-4">
-                                        <div className="w-12 h-12 bg-[#4E3F95]/10 rounded-lg flex items-center justify-center">
+                                        <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                                             {token.token_type === 0 ? (
-                                                <Coins className="w-6 h-6 text-[#4E3F95]" />
+                                                <Coins className="h-6 w-6 text-white" />
                                             ) : (
-                                                <ImageIcon className="w-6 h-6 text-[#4E3F95]" />
+                                                <Palette className="h-6 w-6 text-white" />
                                             )}
                                         </div>
                                         <div>
-                                            <div className="flex items-center space-x-2 mb-1">
-                                                <h3 className="font-semibold text-gray-900">{token.name}</h3>
-                                                <span className="px-2 py-1 bg-gray-100 rounded text-xs font-medium">
-                                                    {token.token_type === 0 ? 'ERC20' : 'ERC721'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center space-x-4 text-sm text-gray-600">
-                                                <span className="font-medium">{token.symbol}</span>
+                                            <h4 className="font-semibold text-slate-900 dark:text-white">
+                                                {token.name}
+                                            </h4>
+                                            <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
+                                                <span>{token.symbol}</span>
+                                                <span>•</span>
+                                                <span>{token.token_type === 0 ? 'ERC20' : 'ERC721'}</span>
+                                                <span>•</span>
                                                 <span>{formatAddress(token.token_address)}</span>
-                                                <span>Creator: {formatAddress(token.creator || '')}</span>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <div className="hidden md:flex items-center space-x-8 text-sm">
-                                        <div className="text-center">
-                                            <div className="font-semibold text-gray-900">
-                                                {formatNumber(token.holders || 0)}
-                                            </div>
-                                            <div className="text-gray-600">Holders</div>
+                                    <div className="flex items-center space-x-4">
+                                        <div className="text-right">
+                                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                                Created
+                                            </p>
+                                            <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                                {formatDate(token.created_at)}
+                                            </p>
                                         </div>
-                                        <div className="text-center">
-                                            <div className="font-semibold text-gray-900">
-                                                {formatNumber(token.transactions || 0)}
-                                            </div>
-                                            <div className="text-gray-600">Transactions</div>
-                                        </div>
-                                        <div className="text-center">
-                                            <div className="font-semibold text-gray-900">
-                                                {formatNumber(parseFloat(token.volume24h || '0'))}
-                                            </div>
-                                            <div className="text-gray-600">24h Volume</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center space-x-2">
-                                        <Link href={`/tokens/${token.token_address}`}>
-                                            <Button variant="outline" size="sm" className="flex items-center space-x-1">
-                                                <span>View</span>
-                                                <ExternalLink className="w-3 h-3" />
-                                            </Button>
+                                        <Link
+                                            href={`/token/${token.token_address}`}
+                                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                                        >
+                                            <ArrowUpRight className="h-4 w-4" />
                                         </Link>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    ) : (
-                        <div className="text-center py-12">
-                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Search className="w-8 h-8 text-gray-400" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-gray-900 mb-2">No tokens found</h3>
-                            <p className="text-gray-600">
-                                Try adjusting your search criteria or filters.
-                            </p>
-                        </div>
                     )}
-                </CardContent>
-            </Card>
-
-            {/* Recent Activity */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                        <Activity className="w-5 h-5" />
-                        <span>Recent Activity</span>
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <div>
-                                    <p className="font-medium text-gray-900">New Token Created</p>
-                                    <p className="text-sm text-gray-600">DeFi Token (DFT) deployed by {formatAddress('0x1234...5678')}</p>
-                                </div>
-                            </div>
-                            <span className="text-sm text-gray-500">5 minutes ago</span>
-                        </div>
-
-                        <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <div>
-                                    <p className="font-medium text-gray-900">Large Transaction</p>
-                                    <p className="text-sm text-gray-600">1M STRK tokens transferred</p>
-                                </div>
-                            </div>
-                            <span className="text-sm text-gray-500">12 minutes ago</span>
-                        </div>
-
-                        <div className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
-                            <div className="flex items-center space-x-4">
-                                <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                                <div>
-                                    <p className="font-medium text-gray-900">NFT Collection Launch</p>
-                                    <p className="text-sm text-gray-600">Starknet Warriors collection went live</p>
-                                </div>
-                            </div>
-                            <span className="text-sm text-gray-500">1 hour ago</span>
-                        </div>
-                    </div>
                 </CardContent>
             </Card>
         </div>
     )
 }
-
-export default ExplorerPage

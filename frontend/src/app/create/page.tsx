@@ -1,417 +1,315 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useWallet } from '@/context/WalletContext'
-import { Coins, Image as ImageIcon, CheckCircle, AlertCircle, Loader } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card'
-import { Input, Select } from '@/components/ui/Input'
-import Button from '@/components/ui/Button'
-import Link from 'next/link'
+import { useWallet } from '@/contexts/WalletContext'
+import { Coins, Image, ArrowRight, Loader2 } from 'lucide-react'
+import { CreateTokenFormData } from '@/types'
+import { getTokenFactoryContract, bigIntToU256, encodeByteArrayForCallData } from '@/lib/starknet'
+import { useToast } from '@/components/ui/toaster'
+import { CallData } from 'starknet'
 
-type TokenType = 'erc20' | 'erc721'
-
-interface FormData {
-    tokenType: TokenType
-    name: string
-    symbol: string
-    decimals: string
-    initialSupply: string
-    baseUri: string
-}
-
-interface FormErrors {
-    name?: string
-    symbol?: string
-    decimals?: string
-    initialSupply?: string
-    baseUri?: string
-}
-
-const CreateTokenPage: React.FC = () => {
-    const { address, isConnected, isLoading: walletLoading } = useWallet()
-    const [formData, setFormData] = useState<FormData>({
-        tokenType: 'erc20',
+export default function CreatePage() {
+    const { account, address, isConnected } = useWallet()
+    const { addToast } = useToast()
+    const [selectedType, setSelectedType] = useState<'erc20' | 'erc721' | null>(null)
+    const [isCreating, setIsCreating] = useState(false)
+    const [formData, setFormData] = useState<CreateTokenFormData>({
+        type: 'erc20',
         name: '',
         symbol: '',
-        decimals: '18',
-        initialSupply: '',
-        baseUri: ''
+        decimals: 18,
+        initial_supply: '',
+        base_uri: '',
     })
-    const [errors, setErrors] = useState<FormErrors>({})
-    const [isCreating, setIsCreating] = useState(false)
-    const [createSuccess, setCreateSuccess] = useState(false)
-    const [txHash, setTxHash] = useState('')
-
-    const tokenTypeOptions = [
-        { value: 'erc20', label: 'ERC20 Token' },
-        { value: 'erc721', label: 'ERC721 NFT Collection' }
-    ]
-
-    const validateForm = (): boolean => {
-        const newErrors: FormErrors = {}
-
-        if (!formData.name.trim()) {
-            newErrors.name = 'Token name is required'
-        } else if (formData.name.length < 2) {
-            newErrors.name = 'Token name must be at least 2 characters'
-        }
-
-        if (!formData.symbol.trim()) {
-            newErrors.symbol = 'Token symbol is required'
-        } else if (formData.symbol.length < 2 || formData.symbol.length > 10) {
-            newErrors.symbol = 'Symbol must be between 2-10 characters'
-        } else if (!/^[A-Z0-9]+$/.test(formData.symbol)) {
-            newErrors.symbol = 'Symbol must contain only uppercase letters and numbers'
-        }
-
-        if (formData.tokenType === 'erc20') {
-            if (!formData.decimals) {
-                newErrors.decimals = 'Decimals is required'
-            } else {
-                const decimals = parseInt(formData.decimals)
-                if (isNaN(decimals) || decimals < 0 || decimals > 18) {
-                    newErrors.decimals = 'Decimals must be between 0-18'
-                }
-            }
-
-            if (!formData.initialSupply.trim()) {
-                newErrors.initialSupply = 'Initial supply is required'
-            } else {
-                const supply = parseFloat(formData.initialSupply)
-                if (isNaN(supply) || supply <= 0) {
-                    newErrors.initialSupply = 'Initial supply must be greater than 0'
-                }
-            }
-        }
-
-        if (formData.tokenType === 'erc721') {
-            if (!formData.baseUri.trim()) {
-                newErrors.baseUri = 'Base URI is required for NFT collections'
-            } else if (!isValidUrl(formData.baseUri)) {
-                newErrors.baseUri = 'Please enter a valid URL'
-            }
-        }
-
-        setErrors(newErrors)
-        return Object.keys(newErrors).length === 0
-    }
-
-    const isValidUrl = (string: string): boolean => {
-        try {
-            new URL(string)
-            return true
-        } catch (_) {
-            return false
-        }
-    }
-
-    const handleInputChange = (field: keyof FormData, value: string) => {
-        setFormData(prev => ({ ...prev, [field]: value }))
-        if (errors[field as keyof FormErrors]) {
-            setErrors(prev => ({ ...prev, [field]: undefined }))
-        }
-    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-
-        if (!validateForm()) return
+        if (!account || !address) {
+            addToast({
+                title: 'Error',
+                description: 'Please connect your wallet first.',
+                variant: 'destructive',
+            })
+            return
+        }
 
         setIsCreating(true)
-
         try {
-            // Mock token creation - replace with actual smart contract call
-            console.log('Creating token with data:', formData)
+            const contract = getTokenFactoryContract(account)
 
-            // Simulate API call
-            await new Promise(resolve => setTimeout(resolve, 3000))
-
-            // Mock transaction hash
-            setTxHash('0x1234567890abcdef1234567890abcdef12345678')
-            setCreateSuccess(true)
-
+            if (formData.type === 'erc20') {
+                // Create ERC20 token
+                if (!formData.initial_supply || !formData.decimals) {
+                    throw new Error('Initial supply and decimals are required for ERC20 tokens')
+                }
+                const initialSupplyU256 = bigIntToU256(BigInt(formData.initial_supply) * BigInt(10 ** formData.decimals))
+                const calldata = CallData.compile({
+                    name: encodeByteArrayForCallData(formData.name),
+                    symbol: encodeByteArrayForCallData(formData.symbol),
+                    decimals: formData.decimals,
+                    initial_supply: initialSupplyU256
+                })
+                const result = await contract.invoke('create_erc20', calldata)
+                console.log('ERC20 token created:', result)
+                addToast({
+                    title: 'Success!',
+                    description: `ERC20 token "${formData.name}" (${formData.symbol}) has been created successfully!`,
+                })
+            } else {
+                // Create ERC721 token
+                if (!formData.base_uri) {
+                    throw new Error('Base URI is required for ERC721 tokens')
+                }
+                const calldata = CallData.compile({
+                    name: encodeByteArrayForCallData(formData.name),
+                    symbol: encodeByteArrayForCallData(formData.symbol),
+                    base_uri: encodeByteArrayForCallData(formData.base_uri)
+                })
+                const result = await contract.invoke('create_erc721', calldata)
+                console.log('ERC721 token created:', result)
+                addToast({
+                    title: 'Success!',
+                    description: `ERC721 collection "${formData.name}" (${formData.symbol}) has been created successfully!`,
+                })
+            }
         } catch (error) {
             console.error('Error creating token:', error)
-            // Handle error
+            addToast({
+                title: 'Error',
+                description: 'Failed to create token. Please try again.',
+                variant: 'destructive',
+            })
         } finally {
             setIsCreating(false)
         }
     }
 
-    if (walletLoading) {
+    if (!isConnected || !account) {
         return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-                <div className="bg-white rounded-xl shadow-lg p-8 max-w-sm w-full text-center">
-                    <div className="relative mb-6">
-                        <div className="animate-spin rounded-full h-16 w-16 border-4 border-slate-200 border-t-[#4E3F95] mx-auto"></div>
-                    </div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">Connecting Wallet</h3>
-                    <p className="text-slate-600">Please wait while we connect to your Starknet wallet</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (!isConnected) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-                <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
-                    <div className="w-20 h-20 bg-[#4E3F95]/10 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                        <Coins className="w-10 h-10 text-[#4E3F95]" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-slate-900 mb-4">Connect Your Wallet</h1>
-                    <p className="text-slate-600 mb-8 leading-relaxed">
-                        Please connect your Starknet wallet to create and deploy tokens on the network.
+            <div className="container mx-auto px-4 py-20">
+                <div className="text-center max-w-md mx-auto">
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                        Connect Your Wallet
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                        You need to connect your Starknet wallet to create tokens
                     </p>
-                    <div className="text-sm text-slate-500">
-                        <p>Supported wallets: ArgentX, Braavos</p>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    if (createSuccess) {
-        return (
-            <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
-                <div className="bg-white rounded-xl shadow-lg p-8 max-w-lg w-full text-center">
-                    <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-                        <CheckCircle className="w-10 h-10 text-green-600" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-slate-900 mb-4">Token Created Successfully!</h1>
-                    <p className="text-slate-600 mb-6 leading-relaxed">
-                        Your {formData.tokenType.toUpperCase()} token "{formData.name}" has been successfully deployed to Starknet.
-                    </p>
-                    <div className="bg-slate-50 p-4 rounded-lg mb-8 border border-slate-200">
-                        <p className="text-sm font-medium text-slate-700 mb-2">Transaction Hash:</p>
-                        <p className="font-mono text-sm text-slate-600 break-all bg-white p-2 rounded border">{txHash}</p>
-                    </div>
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <Link href="/dashboard" className="flex-1">
-                            <Button variant="outline" className="w-full shadow-sm hover:shadow-md transition-shadow">
-                                View Dashboard
-                            </Button>
-                        </Link>
-                        <Button
-                            onClick={() => {
-                                setCreateSuccess(false)
-                                setFormData({
-                                    tokenType: 'erc20',
-                                    name: '',
-                                    symbol: '',
-                                    decimals: '18',
-                                    initialSupply: '',
-                                    baseUri: ''
-                                })
-                                setTxHash('')
-                            }}
-                            className="flex-1 shadow-sm hover:shadow-md transition-shadow"
-                        >
-                            Create Another Token
-                        </Button>
-                    </div>
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 py-8 px-4">
-            <div className="max-w-3xl mx-auto">
-                {/* Header Section */}
+        <div className="container mx-auto px-4 py-12">
+            <div className="max-w-4xl mx-auto">
                 <div className="text-center mb-12">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-[#4E3F95]/10 rounded-xl mb-6 shadow-sm">
-                        <Coins className="w-8 h-8 text-[#4E3F95]" />
-                    </div>
-                    <h1 className="text-4xl font-bold text-slate-900 mb-4">Create New Token</h1>
-                    <p className="text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
-                        Deploy your ERC20 or ERC721 token to Starknet without writing any code. 
-                        Configure your token parameters and deploy in minutes.
+                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+                        Create Your Token
+                    </h1>
+                    <p className="text-xl text-slate-600 dark:text-slate-300">
+                        Deploy ERC20 or ERC721 tokens with just a few clicks
                     </p>
                 </div>
 
-                {/* Main Card */}
-                <div className="bg-white rounded-2xl shadow-xl border border-slate-200/60 overflow-hidden">
-                    <div className="bg-slate-50/50 px-8 py-6 border-b border-slate-200/60">
-                        <h2 className="text-xl font-semibold text-slate-900 flex items-center">
-                            <div className="w-2 h-2 bg-[#4E3F95] rounded-full mr-3"></div>
-                            Token Configuration
-                        </h2>
-                        <p className="text-slate-600 mt-1">Fill in the details for your new token</p>
+                {!selectedType ? (
+                    <div className="grid md:grid-cols-2 gap-8">
+                        <TokenTypeCard
+                            icon={<Coins className="h-12 w-12" />}
+                            title="ERC20 Token"
+                            description="Create fungible tokens like cryptocurrencies, governance tokens, or utility tokens"
+                            features={[
+                                "Customizable decimals",
+                                "Initial supply",
+                                "Mint & burn functions",
+                                "Transfer functionality"
+                            ]}
+                            onClick={() => {
+                                setSelectedType('erc20')
+                                setFormData(prev => ({ ...prev, type: 'erc20' }))
+                            }}
+                        />
+                        <TokenTypeCard
+                            icon={<Image className="h-12 w-12" />}
+                            title="ERC721 Token (NFT)"
+                            description="Create unique non-fungible tokens for art, collectibles, or digital assets"
+                            features={[
+                                "Unique token IDs",
+                                "Metadata support",
+                                "Transfer & approval",
+                                "Creator tracking"
+                            ]}
+                            onClick={() => {
+                                setSelectedType('erc721')
+                                setFormData(prev => ({ ...prev, type: 'erc721' }))
+                            }}
+                        />
                     </div>
-                    
-                    <div className="p-8">
-                        <form onSubmit={handleSubmit} className="space-y-8">
-                            {/* Token Type */}
-                            <div className="space-y-3">
-                                <Select
-                                    label="Token Type"
-                                    value={formData.tokenType}
-                                    onChange={(e) => handleInputChange('tokenType', e.target.value as TokenType)}
-                                    options={tokenTypeOptions}
-                                    helperText="Choose between fungible tokens (ERC20) or NFT collections (ERC721)"
-                                />
-                            </div>
+                ) : (
+                    <div className="max-w-2xl mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
+                        <div className="flex items-center justify-between mb-8">
+                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                                {selectedType === 'erc20' ? 'ERC20 Token' : 'ERC721 Token'}
+                            </h2>
+                            <button
+                                onClick={() => setSelectedType(null)}
+                                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                            >
+                                Change Type
+                            </button>
+                        </div>
 
-                            {/* Form Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Token Name */}
-                                <div className="md:col-span-2">
-                                    <Input
-                                        label="Token Name"
-                                        value={formData.name}
-                                        onChange={(e) => handleInputChange('name', e.target.value)}
-                                        placeholder="e.g., My Awesome Token"
-                                        error={errors.name}
-                                        helperText="The full name of your token"
-                                        required
-                                    />
-                                </div>
-
-                                {/* Token Symbol */}
-                                <Input
-                                    label="Token Symbol"
-                                    value={formData.symbol}
-                                    onChange={(e) => handleInputChange('symbol', e.target.value.toUpperCase())}
-                                    placeholder="e.g., MAT"
-                                    error={errors.symbol}
-                                    helperText="Short identifier (2-10 characters)"
+                        <form onSubmit={handleSubmit} className="space-y-6">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Token Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                                    placeholder="e.g., My Awesome Token"
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     required
                                 />
+                            </div>
 
-                                {/* ERC20 Specific Fields */}
-                                {formData.tokenType === 'erc20' && (
-                                    <>
-                                        <Input
-                                            label="Decimals"
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                    Token Symbol
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.symbol}
+                                    onChange={(e) => setFormData(prev => ({ ...prev, symbol: e.target.value.toUpperCase() }))}
+                                    placeholder="e.g., MAT"
+                                    className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    required
+                                />
+                            </div>
+
+                            {selectedType === 'erc20' && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            Decimals
+                                        </label>
+                                        <input
                                             type="number"
-                                            value={formData.decimals}
-                                            onChange={(e) => handleInputChange('decimals', e.target.value)}
-                                            placeholder="18"
                                             min="0"
                                             max="18"
-                                            error={errors.decimals}
-                                            helperText="Usually 18 for most tokens"
+                                            value={formData.decimals}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, decimals: parseInt(e.target.value) }))}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                             required
                                         />
-
-                                        <div className="md:col-span-2">
-                                            <Input
-                                                label="Initial Supply"
-                                                type="number"
-                                                value={formData.initialSupply}
-                                                onChange={(e) => handleInputChange('initialSupply', e.target.value)}
-                                                placeholder="e.g., 1000000"
-                                                min="0"
-                                                step="any"
-                                                error={errors.initialSupply}
-                                                helperText="The initial number of tokens to mint"
-                                                required
-                                            />
-                                        </div>
-                                    </>
-                                )}
-
-                                {/* ERC721 Specific Fields */}
-                                {formData.tokenType === 'erc721' && (
-                                    <div className="md:col-span-2">
-                                        <Input
-                                            label="Base URI"
-                                            value={formData.baseUri}
-                                            onChange={(e) => handleInputChange('baseUri', e.target.value)}
-                                            placeholder="https://api.example.com/metadata/"
-                                            error={errors.baseUri}
-                                            helperText="Base URL for token metadata (must end with /)"
-                                            required
-                                        />
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Token Preview */}
-                            <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 shadow-sm">
-                                <h3 className="font-semibold text-slate-900 mb-4 flex items-center">
-                                    {formData.tokenType === 'erc20' ? (
-                                        <Coins className="w-5 h-5 mr-2 text-[#4E3F95]" />
-                                    ) : (
-                                        <ImageIcon className="w-5 h-5 mr-2 text-[#4E3F95]" />
-                                    )}
-                                    Token Preview
-                                </h3>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div className="flex justify-between py-2 border-b border-slate-200">
-                                        <span className="text-slate-600 font-medium">Type:</span>
-                                        <span className="font-semibold text-slate-900">{formData.tokenType.toUpperCase()}</span>
-                                    </div>
-                                    <div className="flex justify-between py-2 border-b border-slate-200">
-                                        <span className="text-slate-600 font-medium">Name:</span>
-                                        <span className="font-semibold text-slate-900">{formData.name || 'Not set'}</span>
-                                    </div>
-                                    <div className="flex justify-between py-2 border-b border-slate-200">
-                                        <span className="text-slate-600 font-medium">Symbol:</span>
-                                        <span className="font-semibold text-slate-900">{formData.symbol || 'Not set'}</span>
-                                    </div>
-                                    {formData.tokenType === 'erc20' && (
-                                        <>
-                                            <div className="flex justify-between py-2 border-b border-slate-200">
-                                                <span className="text-slate-600 font-medium">Decimals:</span>
-                                                <span className="font-semibold text-slate-900">{formData.decimals}</span>
-                                            </div>
-                                            <div className="flex justify-between py-2 border-b border-slate-200 col-span-2">
-                                                <span className="text-slate-600 font-medium">Initial Supply:</span>
-                                                <span className="font-semibold text-slate-900">{formData.initialSupply || 'Not set'}</span>
-                                            </div>
-                                        </>
-                                    )}
-                                    {formData.tokenType === 'erc721' && (
-                                        <div className="flex justify-between py-2 border-b border-slate-200 col-span-2">
-                                            <span className="text-slate-600 font-medium">Base URI:</span>
-                                            <span className="font-semibold text-slate-900 text-xs break-all">{formData.baseUri || 'Not set'}</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Important Notice */}
-                            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 shadow-sm">
-                                <div className="flex items-start">
-                                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 mr-3 flex-shrink-0" />
-                                    <div className="text-sm">
-                                        <p className="font-semibold text-amber-800 mb-2">Important Notice</p>
-                                        <p className="text-amber-700 leading-relaxed">
-                                            Once deployed, token parameters cannot be changed. Please review your configuration carefully before creating the token.
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                            18 decimals is standard for most tokens
                                         </p>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* Submit Button */}
-                            <div className="pt-4">
-                                <Button
-                                    type="submit"
-                                    size="lg"
-                                    disabled={isCreating}
-                                    className="w-full h-14 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center space-x-3"
-                                >
-                                    {isCreating ? (
-                                        <>
-                                            <Loader className="w-5 h-5 animate-spin" />
-                                            <span>Creating Token...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Coins className="w-5 h-5" />
-                                            <span>Create Token</span>
-                                        </>
-                                    )}
-                                </Button>
-                            </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                            Initial Supply
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            value={formData.initial_supply}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, initial_supply: e.target.value }))}
+                                            placeholder="e.g., 1000000"
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            required
+                                        />
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                            Total number of tokens to create initially
+                                        </p>
+                                    </div>
+                                </>
+                            )}
+
+                            {selectedType === 'erc721' && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        Base URI
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={formData.base_uri}
+                                        onChange={(e) => setFormData(prev => ({ ...prev, base_uri: e.target.value }))}
+                                        placeholder="https://api.example.com/metadata/"
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        required
+                                    />
+                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                        Base URL for token metadata (JSON files)
+                                    </p>
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={isCreating}
+                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                            >
+                                {isCreating ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                        Creating Token...
+                                    </>
+                                ) : (
+                                    <>
+                                        Create Token
+                                        <ArrowRight className="w-5 h-5 ml-2" />
+                                    </>
+                                )}
+                            </button>
                         </form>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     )
 }
 
-export default CreateTokenPage
+function TokenTypeCard({
+    icon,
+    title,
+    description,
+    features,
+    onClick
+}: {
+    icon: React.ReactNode
+    title: string
+    description: string
+    features: string[]
+    onClick: () => void
+}) {
+    return (
+        <div
+            onClick={onClick}
+            className="p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-slate-200 dark:border-slate-700 cursor-pointer group"
+        >
+            <div className="text-blue-600 dark:text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+                {icon}
+            </div>
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                {title}
+            </h3>
+            <p className="text-slate-600 dark:text-slate-300 mb-6">
+                {description}
+            </p>
+            <ul className="space-y-2">
+                {features.map((feature, index) => (
+                    <li key={index} className="flex items-center text-sm text-slate-600 dark:text-slate-300">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full mr-3"></div>
+                        {feature}
+                    </li>
+                ))}
+            </ul>
+            <div className="mt-6 text-blue-600 dark:text-blue-400 font-semibold group-hover:translate-x-2 transition-transform inline-flex items-center">
+                Choose This Type
+                <ArrowRight className="w-4 h-4 ml-2" />
+            </div>
+        </div>
+    )
+}

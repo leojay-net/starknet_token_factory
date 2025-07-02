@@ -1,53 +1,53 @@
 export interface TokenInfo {
-    token_address: string
-    token_type: number // 0 for ERC20, 1 for ERC721
-    name: string
-    symbol: string
-    created_at: number
+    token_address: string;
+    token_type: 0 | 1; // 0 for ERC20, 1 for ERC721
+    name: string;
+    symbol: string;
+    created_at: number;
 }
 
-export interface ERC20TokenDetails extends TokenInfo {
-    decimals: number
-    total_supply: string
-    creator: string
+export interface ERC20TokenData extends TokenInfo {
+    decimals: number;
+    total_supply: string;
+    balance?: string;
 }
 
-export interface ERC721TokenDetails extends TokenInfo {
-    base_uri: string
-    total_supply: number
-    creator: string
+export interface ERC721TokenData extends TokenInfo {
+    base_uri: string;
+    total_supply: number;
+    owned_tokens?: string[];
 }
 
-export interface Transaction {
-    hash: string
-    from: string
-    to: string
-    value: string
-    timestamp: number
-    token_address: string
-    token_symbol: string
-    type: 'transfer' | 'mint' | 'burn'
-}
-
-export interface DashboardStats {
-    totalTokensCreated: number
-    totalERC20Tokens: number
-    totalERC721Tokens: number
-    totalTransactions: number
-    totalVolume: string
+export interface TokenTransaction {
+    hash: string;
+    from: string;
+    to: string;
+    amount?: string;
+    token_id?: string;
+    timestamp: number;
+    block_number: number;
 }
 
 export interface UserStats {
-    tokensCreated: number
-    erc20Count: number
-    erc721Count: number
-    totalTransactions: number
-    tokens: TokenInfo[]
+    total_tokens_created: number;
+    erc20_tokens: number;
+    erc721_tokens: number;
+    total_transactions: number;
 }
 
-export interface ContractConfig {
-    factoryAddress: string
-    erc20ClassHash: string
-    erc721ClassHash: string
-    network: 'mainnet' | 'testnet'
+export interface GlobalStats {
+    total_tokens: number;
+    total_erc20: number;
+    total_erc721: number;
+    total_transactions: number;
+    active_users: number;
+}
+
+export interface CreateTokenFormData {
+    type: 'erc20' | 'erc721';
+    name: string;
+    symbol: string;
+    decimals?: number;
+    initial_supply?: string;
+    base_uri?: string;
 }

@@ -1,0 +1,100 @@
+/* Wallet Modal Animation Styles */
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+@keyframes backdropFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes pulseGlow {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+    }
+
+    50% {
+        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+    }
+}
+
+@keyframes successCheck {
+    0% {
+        transform: scale(0);
+    }
+
+    50% {
+        transform: scale(1.1);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.wallet-modal-backdrop {
+    animation: backdropFadeIn 0.3s ease-out;
+}
+
+.wallet-modal-content {
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+.wallet-button-connecting {
+    animation: pulseGlow 2s infinite;
+}
+
+.success-icon {
+    animation: successCheck 0.5s ease-out;
+}
+
+/* Hover effects for wallet buttons */
+.wallet-button {
+    position: relative;
+    overflow: hidden;
+}
+
+.wallet-button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.1), transparent);
+    transition: left 0.5s;
+}
+
+.wallet-button:hover::before {
+    left: 100%;
+}
+
+/* Custom loading spinner */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.custom-spinner {
+    animation: spin 1s linear infinite;
+}
