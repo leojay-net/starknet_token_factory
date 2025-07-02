@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useWallet } from '@/contexts/WalletContext'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { Wallet, Menu } from 'lucide-react'
 import { useState } from 'react'
 

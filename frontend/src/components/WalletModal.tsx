@@ -2,7 +2,7 @@
 
 import { useConnect } from '@starknet-react/core'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/Button'
 import { Wallet, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 
