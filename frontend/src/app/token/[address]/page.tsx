@@ -22,6 +22,7 @@ import { useWallet } from '@/contexts/WalletContext'
 import { useToast } from '@/components/ui/toaster'
 import { getERC721Contract, encodeByteArrayForCallData, provider } from '@/lib/starknet'
 import { CallData } from 'starknet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export default function TokenPage() {
     const params = useParams()
@@ -34,7 +35,7 @@ export default function TokenPage() {
     const [loadingNfts, setLoadingNfts] = useState(false)
 
     // Minting state
-    const [showMintForm, setShowMintForm] = useState(false)
+    const [showMintModal, setShowMintModal] = useState(false)
     const [isMinting, setIsMinting] = useState(false)
     const [mintFormData, setMintFormData] = useState({
         name: '',
@@ -121,17 +122,72 @@ export default function TokenPage() {
     // Helper function to parse ByteArray
     const parseByteArray = (result: any): string => {
         try {
+            console.log('Parsing ByteArray result:', result);
+
             if (typeof result === 'string') {
                 return result
             }
-            if (result?.data?.[0]) {
-                const hexString = result.data[0].replace('0x', '')
-                return Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '')
+
+            // Handle raw ByteArray format: [data_len, data1, data2, ..., pending_word, pending_word_len]
+            if (Array.isArray(result) && result.length >= 2) {
+                const dataLen = parseInt(result[0]);
+                let fullString = '';
+
+                // Extract data elements (skip first element which is length)
+                for (let i = 1; i <= dataLen; i++) {
+                    if (result[i] && result[i] !== '0x0') {
+                        const hexString = result[i].replace('0x', '');
+                        const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                        fullString += decodedPart;
+                    }
+                }
+
+                // Handle pending word if present
+                const pendingWordIndex = dataLen + 1;
+                const pendingWordLenIndex = result.length - 1;
+
+                if (result[pendingWordLenIndex] && parseInt(result[pendingWordLenIndex]) > 0) {
+                    const pendingWordLen = parseInt(result[pendingWordLenIndex]);
+                    if (result[pendingWordIndex] && result[pendingWordIndex] !== '0x0') {
+                        const pendingHex = result[pendingWordIndex].replace('0x', '');
+                        // Only take the specified number of bytes from the pending word
+                        const pendingBytes = pendingHex.slice(0, pendingWordLen * 2); // 2 hex chars per byte
+                        if (pendingBytes) {
+                            const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                            fullString += pendingString;
+                        }
+                    }
+                }
+
+                console.log('Parsed ByteArray result:', fullString);
+                return fullString.trim();
             }
-            if (Array.isArray(result) && result.length > 0) {
-                const hexString = result[0].replace('0x', '')
-                return Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '')
+
+            // Handle structured ByteArray format: { data: [...], pending_word: ..., pending_word_len: ... }
+            if (result?.data && Array.isArray(result.data)) {
+                let fullString = '';
+
+                for (const element of result.data) {
+                    if (element && element !== '0x0') {
+                        const hexString = element.replace('0x', '');
+                        const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                        fullString += decodedPart;
+                    }
+                }
+
+                if (result.pending_word && result.pending_word !== '0x0' && result.pending_word_len && parseInt(result.pending_word_len) > 0) {
+                    const pendingHex = result.pending_word.replace('0x', '');
+                    const pendingLength = parseInt(result.pending_word_len);
+                    const pendingBytes = pendingHex.slice(0, pendingLength * 2);
+                    if (pendingBytes) {
+                        const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                        fullString += pendingString;
+                    }
+                }
+
+                return fullString.trim();
             }
+
             return ''
         } catch (e) {
             console.warn('Error parsing ByteArray:', e, result)
@@ -315,10 +371,72 @@ export default function TokenPage() {
 
             // Mint the NFT
             const contract = getERC721Contract(tokenAddress, account)
+
+            console.log('=== NFT MINTING DEBUG ===');
+            console.log('Original metadata URI:', metadataUri);
+            console.log('Metadata URI length:', metadataUri.length);
+            console.log('Metadata URI bytes:', new TextEncoder().encode(metadataUri));
+
+            // Manually encode the ByteArray for the contract call
+            const encodedTokenUri = encodeByteArrayForCallData(metadataUri);
+            console.log('=== BYTEARRAY ENCODING ===');
+            console.log('Encoded ByteArray structure:', encodedTokenUri);
+            console.log('Data array length:', encodedTokenUri.data.length);
+            console.log('Data elements:', encodedTokenUri.data);
+            console.log('Pending word:', encodedTokenUri.pending_word);
+            console.log('Pending word length:', encodedTokenUri.pending_word_len);
+
+            // Log each data element decoded
+            console.log('=== DATA ELEMENTS DECODED ===');
+            encodedTokenUri.data.forEach((element, index) => {
+                const hexString = element.replace('0x', '');
+                const decoded = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                console.log(`Data[${index}]: ${element} -> "${decoded}"`);
+            });
+
+            // Log pending word decoded if exists
+            if (encodedTokenUri.pending_word !== '0x0' && parseInt(encodedTokenUri.pending_word_len) > 0) {
+                const pendingHex = encodedTokenUri.pending_word.replace('0x', '');
+                const pendingBytes = pendingHex.slice(0, parseInt(encodedTokenUri.pending_word_len) * 2);
+                const pendingDecoded = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                console.log(`Pending word: ${encodedTokenUri.pending_word} -> "${pendingDecoded}"`);
+            }
+
+            // Use CallData.compile to properly serialize the ByteArray structure
             const calldata = CallData.compile({
                 to: mintFormData.recipient,
-                token_uri: encodeByteArrayForCallData(metadataUri)
-            })
+                token_uri: encodedTokenUri
+            });
+
+            console.log('=== CALLDATA ===');
+            console.log('Compiled calldata:', calldata);
+            console.log('Calldata length:', calldata.length);
+
+            // Test reconstruction to verify encoding/decoding
+            console.log('=== RECONSTRUCTION TEST ===');
+            let reconstructed = '';
+
+            // Reconstruct from data array
+            for (const element of encodedTokenUri.data) {
+                const hexString = element.replace('0x', '');
+                const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                reconstructed += decodedPart;
+            }
+
+            // Add pending word if exists
+            if (encodedTokenUri.pending_word !== '0x0' && parseInt(encodedTokenUri.pending_word_len) > 0) {
+                const pendingHex = encodedTokenUri.pending_word.replace('0x', '');
+                const pendingBytes = pendingHex.slice(0, parseInt(encodedTokenUri.pending_word_len) * 2);
+                const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                reconstructed += pendingString;
+            }
+
+            console.log('Original URI:', metadataUri);
+            console.log('Reconstructed URI:', reconstructed);
+            console.log('Match:', metadataUri === reconstructed);
+            console.log('Original length:', metadataUri.length);
+            console.log('Reconstructed length:', reconstructed.length);
+            console.log('=== END DEBUG ===');
 
             const result = await contract.invoke('mint', calldata)
             console.log('NFT minted:', result)
@@ -330,16 +448,10 @@ export default function TokenPage() {
                 title: 'Success!',
                 description: `NFT "${mintFormData.name}" has been minted successfully!`,
             })
-
-            // Reset form
-            setMintFormData({
-                name: '',
-                description: '',
-                recipient: address || ''
-            })
+            setMintFormData({ name: '', description: '', recipient: address || '' })
             setNftImage(null)
             setNftImageUrl("")
-            setShowMintForm(false)
+            setShowMintModal(false)
 
             // Refresh NFT collection to show the new NFT
             await fetchNftCollection()
@@ -360,10 +472,25 @@ export default function TokenPage() {
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-8">
-                <div className="flex items-center justify-center py-20">
+                <div className="flex items-center justify-center min-h-screen -mt-20">
                     <div className="text-center">
-                        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                        <p className="text-slate-600 dark:text-slate-400">Loading token data...</p>
+                        <div className="relative w-24 h-24 mx-auto mb-8">
+                            <div className="absolute inset-0 border-4 border-blue-200 dark:border-blue-800 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                            <div className="absolute inset-2 border-4 border-purple-200 dark:border-purple-800 rounded-full"></div>
+                            <div className="absolute inset-2 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                        </div>
+                        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                            Loading Token Data
+                        </h2>
+                        <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                            Fetching token information from the blockchain. This may take a few moments...
+                        </p>
+                        <div className="mt-8 flex items-center justify-center space-x-2">
+                            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -374,18 +501,25 @@ export default function TokenPage() {
         return (
             <div className="container mx-auto px-4 py-8">
                 <div className="text-center py-20">
-                    <h1 className="text-2xl font-bold text-red-600 mb-4">
+                    <div className="w-24 h-24 bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/20 dark:to-orange-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                        <div className="text-4xl">⚠️</div>
+                    </div>
+                    <h1 className="text-3xl font-bold text-red-600 dark:text-red-400 mb-4">
                         Error Loading Token
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-8">
+                    <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
                         {error}
                     </p>
                     <div className="space-x-4">
                         <Link href="/dashboard">
-                            <Button variant="outline">Go to Dashboard</Button>
+                            <Button variant="outline" className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                Go to Dashboard
+                            </Button>
                         </Link>
                         <Link href="/explorer">
-                            <Button>Browse All Tokens</Button>
+                            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                                Browse All Tokens
+                            </Button>
                         </Link>
                     </div>
                 </div>
@@ -397,14 +531,19 @@ export default function TokenPage() {
         return (
             <div className="container mx-auto px-4 py-8">
                 <div className="text-center py-20">
-                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6 border-2 border-dashed border-slate-300 dark:border-slate-600">
+                        <div className="text-4xl">🔍</div>
+                    </div>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
                         Token Not Found
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-8">
+                    <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
                         The token address you&apos;re looking for doesn&apos;t exist or hasn&apos;t been created through our factory.
                     </p>
                     <Link href="/explorer">
-                        <Button>Back to Explorer</Button>
+                        <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                            Back to Explorer
+                        </Button>
                     </Link>
                 </div>
             </div>
@@ -448,8 +587,8 @@ export default function TokenPage() {
                                 <div className="flex items-center space-x-6">
                                     <div className="relative">
                                         <div className={`w-20 h-20 bg-gradient-to-r ${isERC20
-                                                ? 'from-yellow-400 via-orange-500 to-red-500'
-                                                : 'from-blue-600 via-purple-600 to-indigo-600'
+                                            ? 'from-yellow-400 via-orange-500 to-red-500'
+                                            : 'from-blue-600 via-purple-600 to-indigo-600'
                                             } rounded-2xl flex items-center justify-center shadow-lg`}>
                                             {isERC20 ? (
                                                 <Coins className="h-10 w-10 text-white" />
@@ -465,16 +604,16 @@ export default function TokenPage() {
                                         <CardTitle className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
                                             {tokenData.name}
                                         </CardTitle>
-                                        <CardDescription className="text-xl mt-2 flex items-center space-x-3">
+                                        <div className="text-xl mt-2 flex items-center space-x-3">
                                             <span className="font-semibold text-slate-700 dark:text-slate-300">{tokenData.symbol}</span>
                                             <span className="text-slate-400">•</span>
                                             <div className={`px-3 py-1 rounded-full text-sm font-medium ${isERC20
-                                                    ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
-                                                    : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                                ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                                                : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
                                                 }`}>
                                                 {isERC20 ? 'ERC20 Token' : 'ERC721 Collection'}
                                             </div>
-                                        </CardDescription>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -524,7 +663,7 @@ export default function TokenPage() {
                                     </div>
                                 </div>
 
-                                {/* Conditional Fields */}
+                                {/* Decimals for ERC20 only */}
                                 {isERC20 && tokenData.type === 'ERC20' && (
                                     <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
                                         <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
@@ -533,17 +672,6 @@ export default function TokenPage() {
                                         <span className="text-sm font-bold text-slate-900 dark:text-white block mt-2">
                                             {(tokenData as ERC20TokenData).decimals}
                                         </span>
-                                    </div>
-                                )}
-
-                                {!isERC20 && tokenData.type === 'ERC721' && (
-                                    <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
-                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
-                                            Base URI
-                                        </span>
-                                        <code className="text-xs font-mono text-slate-900 dark:text-white block mt-2 break-all">
-                                            {erc721Data.baseUri || 'Not set'}
-                                        </code>
                                     </div>
                                 )}
                             </div>
@@ -583,7 +711,7 @@ export default function TokenPage() {
                                         </p>
                                         {isConnected && (
                                             <Button
-                                                onClick={() => setShowMintForm(true)}
+                                                onClick={() => setShowMintModal(true)}
                                                 className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                                             >
                                                 <Plus className="h-4 w-4 mr-2" />
@@ -696,199 +824,16 @@ export default function TokenPage() {
                                             </p>
                                         </div>
                                     </div>
-                                    {!showMintForm && (
-                                        <Button
-                                            onClick={() => setShowMintForm(true)}
-                                            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
-                                            size="lg"
-                                        >
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Start Minting
-                                        </Button>
-                                    )}
+                                    <Button
+                                        onClick={() => setShowMintModal(true)}
+                                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                                        size="lg"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Start Minting
+                                    </Button>
                                 </CardTitle>
                             </CardHeader>
-                            {showMintForm && (
-                                <CardContent className="space-y-8">
-                                    {/* Form Header */}
-                                    <div className="text-center py-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
-                                        <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                            <Palette className="h-8 w-8 text-white" />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
-                                            Create Your NFT
-                                        </h3>
-                                        <p className="text-slate-600 dark:text-slate-400">
-                                            Upload an image and add metadata to mint your unique NFT
-                                        </p>
-                                    </div>
-
-                                    {/* Form Fields */}
-                                    <div className="space-y-6">
-                                        {/* Basic Info */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                    NFT Name *
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={mintFormData.name}
-                                                    onChange={(e) => setMintFormData(prev => ({ ...prev, name: e.target.value }))}
-                                                    placeholder="e.g., Cosmic Dragon #001"
-                                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-medium"
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                    Recipient Address
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    value={mintFormData.recipient}
-                                                    onChange={(e) => setMintFormData(prev => ({ ...prev, recipient: e.target.value }))}
-                                                    placeholder="0x..."
-                                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono text-sm"
-                                                    required
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Description */}
-                                        <div className="space-y-2">
-                                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                Description *
-                                            </label>
-                                            <textarea
-                                                value={mintFormData.description}
-                                                onChange={(e) => setMintFormData(prev => ({ ...prev, description: e.target.value }))}
-                                                placeholder="Describe what makes this NFT special..."
-                                                rows={4}
-                                                className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
-                                                required
-                                            />
-                                        </div>
-
-                                        {/* Image Upload */}
-                                        <div className="space-y-3">
-                                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                                Upload NFT Image *
-                                            </label>
-
-                                            {/* Upload Area */}
-                                            <div className="relative">
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    onChange={handleImageChange}
-                                                    ref={fileInputRef}
-                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                                    required
-                                                />
-                                                <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-slate-50 dark:bg-slate-800/50">
-                                                    <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                                        <ImageIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                                                    </div>
-                                                    <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                                                        Choose your NFT image
-                                                    </h4>
-                                                    <p className="text-slate-600 dark:text-slate-400 mb-2">
-                                                        PNG, JPG, GIF up to 10MB
-                                                    </p>
-                                                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                                                        Click or drag and drop your file here
-                                                    </p>
-                                                </div>
-                                            </div>
-
-                                            {/* Upload Status */}
-                                            {uploadingImage && (
-                                                <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700">
-                                                    <div className="flex items-center space-x-3">
-                                                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
-                                                        <div>
-                                                            <p className="font-medium text-blue-900 dark:text-blue-100">Uploading to IPFS...</p>
-                                                            <p className="text-sm text-blue-700 dark:text-blue-300">This may take a few moments</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {uploadingMetadata && (
-                                                <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl border border-purple-200 dark:border-purple-700">
-                                                    <div className="flex items-center space-x-3">
-                                                        <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
-                                                        <div>
-                                                            <p className="font-medium text-purple-900 dark:text-purple-100">Creating metadata...</p>
-                                                            <p className="text-sm text-purple-700 dark:text-purple-300">Preparing your NFT data</p>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Image Preview */}
-                                            {nftImageUrl && !uploadingImage && (
-                                                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-800/30 rounded-xl border border-green-200 dark:border-green-700">
-                                                    <div className="flex items-start space-x-4">
-                                                        <div className="flex-shrink-0">
-                                                            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                                                        </div>
-                                                        <div className="flex-1">
-                                                            <p className="font-medium text-green-900 dark:text-green-100 mb-3">
-                                                                ✅ Image uploaded successfully!
-                                                            </p>
-                                                            <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-green-200 dark:border-green-700">
-                                                                <img
-                                                                    src={nftImageUrl}
-                                                                    alt="NFT Preview"
-                                                                    className="w-full h-auto rounded-lg max-h-64 object-contain"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Action Buttons */}
-                                        <div className="flex space-x-4 pt-6">
-                                            <Button
-                                                onClick={handleMintNFT}
-                                                disabled={isMinting || uploadingImage || uploadingMetadata || !nftImageUrl}
-                                                className="flex-1 h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-semibold"
-                                                size="lg"
-                                            >
-                                                {isMinting ? (
-                                                    <>
-                                                        <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                                                        Minting NFT...
-                                                    </>
-                                                ) : uploadingMetadata ? (
-                                                    <>
-                                                        <Loader2 className="w-5 h-5 mr-3 animate-spin" />
-                                                        Preparing...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Palette className="w-5 h-5 mr-3" />
-                                                        Mint NFT
-                                                    </>
-                                                )}
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => setShowMintForm(false)}
-                                                disabled={isMinting || uploadingImage || uploadingMetadata}
-                                                className="h-14 px-8 border-2 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                                size="lg"
-                                            >
-                                                Cancel
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            )}
                         </Card>
                     )}
                 </div>
@@ -981,7 +926,7 @@ export default function TokenPage() {
                                         Create a new NFT instantly
                                     </p>
                                     <Button
-                                        onClick={() => setShowMintForm(true)}
+                                        onClick={() => setShowMintModal(true)}
                                         className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                                         size="sm"
                                     >
@@ -1037,7 +982,7 @@ export default function TokenPage() {
                             </p>
                             {!isERC20 && isConnected && (
                                 <Button
-                                    onClick={() => setShowMintForm(true)}
+                                    onClick={() => setShowMintModal(true)}
                                     className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                                 >
                                     <Plus className="h-4 w-4 mr-2" />
@@ -1100,6 +1045,202 @@ export default function TokenPage() {
                     )}
                 </CardContent>
             </Card>
+
+            {/* Mint NFT Modal */}
+            <Dialog open={showMintModal} onOpenChange={setShowMintModal}>
+                <DialogContent className="max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                                <Palette className="h-5 w-5 text-white" />
+                            </div>
+                            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                Mint NFT
+                            </span>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-8">
+                        {/* Form Header */}
+                        <div className="text-center py-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
+                            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <Palette className="h-8 w-8 text-white" />
+                            </div>
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                Create Your NFT
+                            </h3>
+                            <p className="text-slate-600 dark:text-slate-400">
+                                Upload an image and add metadata to mint your unique NFT
+                            </p>
+                        </div>
+
+                        {/* Form Fields */}
+                        <div className="space-y-6">
+                            {/* Basic Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                        NFT Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={mintFormData.name}
+                                        onChange={(e) => setMintFormData(prev => ({ ...prev, name: e.target.value }))}
+                                        placeholder="e.g., Cosmic Dragon #001"
+                                        className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-medium"
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                        Recipient Address
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={mintFormData.recipient}
+                                        onChange={(e) => setMintFormData(prev => ({ ...prev, recipient: e.target.value }))}
+                                        placeholder="0x..."
+                                        className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono text-sm"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            <div className="space-y-2">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Description *
+                                </label>
+                                <textarea
+                                    value={mintFormData.description}
+                                    onChange={(e) => setMintFormData(prev => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Describe what makes this NFT special..."
+                                    rows={4}
+                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
+                                    required
+                                />
+                            </div>
+
+                            {/* Image Upload */}
+                            <div className="space-y-3">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                    Upload NFT Image *
+                                </label>
+
+                                {/* Upload Area */}
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        ref={fileInputRef}
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        required
+                                    />
+                                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-slate-50 dark:bg-slate-800/50">
+                                        <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                            <ImageIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                        </div>
+                                        <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                                            Choose your NFT image
+                                        </h4>
+                                        <p className="text-slate-600 dark:text-slate-400 mb-2">
+                                            PNG, JPG, GIF up to 10MB
+                                        </p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                            Click or drag and drop your file here
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Upload Status */}
+                                {uploadingImage && (
+                                    <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700">
+                                        <div className="flex items-center space-x-3">
+                                            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                            <div>
+                                                <p className="font-medium text-blue-900 dark:text-blue-100">Uploading to IPFS...</p>
+                                                <p className="text-sm text-blue-700 dark:text-blue-300">This may take a few moments</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {uploadingMetadata && (
+                                    <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl border border-purple-200 dark:border-purple-700">
+                                        <div className="flex items-center space-x-3">
+                                            <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                                            <div>
+                                                <p className="font-medium text-purple-900 dark:text-purple-100">Creating metadata...</p>
+                                                <p className="text-sm text-purple-700 dark:text-purple-300">Preparing your NFT data</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Image Preview */}
+                                {nftImageUrl && !uploadingImage && (
+                                    <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-800/30 rounded-xl border border-green-200 dark:border-green-700">
+                                        <div className="flex items-start space-x-4">
+                                            <div className="flex-shrink-0">
+                                                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-medium text-green-900 dark:text-green-100 mb-3">
+                                                    ✅ Image uploaded successfully!
+                                                </p>
+                                                <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-green-200 dark:border-green-700">
+                                                    <img
+                                                        src={nftImageUrl}
+                                                        alt="NFT Preview"
+                                                        className="w-full h-auto rounded-lg max-h-64 object-contain"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex space-x-4 pt-6">
+                                <Button
+                                    onClick={handleMintNFT}
+                                    disabled={isMinting || uploadingImage || uploadingMetadata || !nftImageUrl}
+                                    className="flex-1 h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-semibold"
+                                    size="lg"
+                                >
+                                    {isMinting ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                                            Minting NFT...
+                                        </>
+                                    ) : uploadingMetadata ? (
+                                        <>
+                                            <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                                            Preparing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Palette className="w-5 h-5 mr-3" />
+                                            Mint NFT
+                                        </>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowMintModal(false)}
+                                    disabled={isMinting || uploadingImage || uploadingMetadata}
+                                    className="h-14 px-8 border-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    size="lg"
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

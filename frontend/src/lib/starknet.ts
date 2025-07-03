@@ -139,16 +139,55 @@ export function encodeByteArrayWithCallData(str: string) {
 
 // Utility to encode a JS string to Cairo ByteArray struct for CallData.compile
 export function encodeByteArrayForCallData(str: string) {
+    console.log('=== ENCODING BYTEARRAY ===');
+    console.log('Input string:', str);
+    console.log('Input string length:', str.length);
+
     const encoder = new TextEncoder();
     const bytes = encoder.encode(str);
-    // For short strings, fit in a single bytes31 (31 bytes)
-    const bytes31 = new Uint8Array(31);
-    bytes31.set(bytes.slice(0, 31));
-    const dataFelt = '0x' + Array.from(bytes31).map(b => b.toString(16).padStart(2, '0')).join('');
+    console.log('Encoded bytes length:', bytes.length);
+    console.log('Encoded bytes:', Array.from(bytes));
+
+    const dataArray = [];
+    let pendingWord = '0x0';
+    let pendingWordLen = 0;
+
+    // Process bytes in chunks of 31 (bytes31 size)
+    let offset = 0;
+    while (offset < bytes.length) {
+        const chunkSize = Math.min(31, bytes.length - offset);
+        console.log(`Processing chunk at offset ${offset}, size: ${chunkSize}`);
+
+        if (chunkSize === 31) {
+            // Full chunk - add to data array
+            const chunk = bytes.slice(offset, offset + 31);
+            const bytes31 = new Uint8Array(31);
+            bytes31.set(chunk);
+            const dataFelt = '0x' + Array.from(bytes31).map(b => b.toString(16).padStart(2, '0')).join('');
+            console.log(`Full chunk ${dataArray.length}: ${dataFelt}`);
+            console.log(`Chunk decoded: "${Buffer.from(chunk).toString('utf8')}"`);
+            dataArray.push(dataFelt);
+            offset += 31;
+        } else {
+            // Partial chunk - this becomes the pending word
+            const chunk = bytes.slice(offset);
+            const hexString = '0x' + Array.from(chunk).map(b => b.toString(16).padStart(2, '0')).join('').padEnd(62, '0'); // Pad to 31 bytes
+            pendingWord = hexString;
+            pendingWordLen = chunk.length;
+            console.log(`Pending word: ${pendingWord} (length: ${pendingWordLen})`);
+            console.log(`Pending chunk decoded: "${Buffer.from(chunk).toString('utf8')}"`);
+            break;
+        }
+    }
+
+    console.log('Final data array length:', dataArray.length);
+    console.log('Final pending word length:', pendingWordLen);
+    console.log('=== END ENCODING ===');
+
     return {
-        data: [dataFelt],
-        pending_word: '0x0',
-        pending_word_len: bytes.length.toString()
+        data: dataArray,
+        pending_word: pendingWord,
+        pending_word_len: pendingWordLen.toString()
     };
 }
 

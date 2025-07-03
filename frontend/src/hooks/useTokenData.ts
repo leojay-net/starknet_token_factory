@@ -199,22 +199,76 @@ export function useTokenData(tokenAddress: string) {
 // Helper function to parse ByteArray from contract response
 function parseByteArray(result: any): string {
     try {
+        console.log('Parsing ByteArray result:', result);
+
         // Handle different possible ByteArray formats
         if (typeof result === 'string') {
             // Simple string response
             return result;
         }
 
-        if (result?.data?.[0]) {
-            // ByteArray structure: { data: Array<bytes31>, pending_word: felt252, pending_word_len: u32 }
-            const hexString = result.data[0].replace('0x', '');
-            return Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+        // Handle raw ByteArray format: [data_len, data1, data2, ..., pending_word, pending_word_len]
+        if (Array.isArray(result) && result.length >= 2) {
+            const dataLen = parseInt(result[0]);
+            let fullString = '';
+
+            // Extract data elements (skip first element which is length)
+            for (let i = 1; i <= dataLen; i++) {
+                if (result[i] && result[i] !== '0x0') {
+                    const hexString = result[i].replace('0x', '');
+                    const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                    fullString += decodedPart;
+                }
+            }
+
+            // Handle pending word if present
+            const pendingWordIndex = dataLen + 1;
+            const pendingWordLenIndex = result.length - 1;
+
+            if (result[pendingWordLenIndex] && parseInt(result[pendingWordLenIndex]) > 0) {
+                const pendingWordLen = parseInt(result[pendingWordLenIndex]);
+                if (result[pendingWordIndex] && result[pendingWordIndex] !== '0x0') {
+                    const pendingHex = result[pendingWordIndex].replace('0x', '');
+                    // Only take the specified number of bytes from the pending word
+                    const pendingBytes = pendingHex.slice(0, pendingWordLen * 2); // 2 hex chars per byte
+                    if (pendingBytes) {
+                        const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                        fullString += pendingString;
+                    }
+                }
+            }
+
+            console.log('Parsed ByteArray result:', fullString);
+            return fullString.trim();
         }
 
-        if (Array.isArray(result) && result.length > 0) {
-            // Sometimes the response is just an array
-            const hexString = result[0].replace('0x', '');
-            return Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+        // Handle structured ByteArray format: { data: [...], pending_word: ..., pending_word_len: ... }
+        if (result?.data && Array.isArray(result.data)) {
+            let fullString = '';
+
+            // Concatenate all data elements to handle long strings
+            for (const element of result.data) {
+                if (element && element !== '0x0') {
+                    const hexString = element.replace('0x', '');
+                    const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                    fullString += decodedPart;
+                }
+            }
+
+            // Handle pending word if it exists and has content
+            if (result.pending_word && result.pending_word !== '0x0' && result.pending_word_len && parseInt(result.pending_word_len) > 0) {
+                const pendingHex = result.pending_word.replace('0x', '');
+                const pendingLength = parseInt(result.pending_word_len);
+
+                // Only take the specified number of bytes from the pending word
+                const pendingBytes = pendingHex.slice(0, pendingLength * 2); // 2 hex chars per byte
+                if (pendingBytes) {
+                    const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                    fullString += pendingString;
+                }
+            }
+
+            return fullString.trim();
         }
 
         return 'Unknown';
