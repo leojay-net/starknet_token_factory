@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/Button'
 import { Wallet, Menu } from 'lucide-react'
 import { useState } from 'react'
 import { usePathname } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 
 export function Navbar() {
     const { address, isConnected, connect, disconnect, isLoading } = useWallet()
     const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const pathname = usePathname();
     const pathname = usePathname();
 
     const formatAddress = (addr: string) => {
