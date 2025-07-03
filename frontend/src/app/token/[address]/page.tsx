@@ -30,7 +30,6 @@ export default function TokenPage() {
     const { tokenData, loading, error } = useTokenData(tokenAddress)
     const { account, address, isConnected } = useWallet()
     const { addToast } = useToast()
-    const [transactions, setTransactions] = useState<TokenTransaction[]>([])
     const [nftCollection, setNftCollection] = useState<any[]>([])
     const [loadingNfts, setLoadingNfts] = useState(false)
 
@@ -49,73 +48,79 @@ export default function TokenPage() {
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => {
-        if (tokenAddress) {
-            fetchTransactionHistory()
-            if (tokenData && tokenData.type === 'ERC721') {
-                fetchNftCollection()
-            }
+        if (tokenAddress && tokenData && tokenData.type === 'ERC721') {
+            fetchNftCollection()
         }
     }, [tokenAddress, tokenData])
 
     const fetchNftCollection = async () => {
-        if (!tokenData || tokenData.type !== 'ERC721') return
+        if (!tokenData || tokenData.type !== 'ERC721') return;
 
-        setLoadingNfts(true)
+        setLoadingNfts(true);
         try {
-            const contract = getERC721Contract(tokenAddress)
-            const nfts = []
+            const contract = getERC721Contract(tokenAddress);
+            const nfts = [];
 
-            // Try to fetch NFTs (assuming sequential token IDs starting from 1)
-            for (let i = 1; i <= 10; i++) { // Check first 10 NFTs
+            // Get the upper bound for token IDs
+            const nextTokenIdResult = await contract.call('get_next_token_id');
+            let maxId = 0;
+            if (Array.isArray(nextTokenIdResult)) {
+                // If it's an array, use the first element
+                const val = nextTokenIdResult[0];
+                if (val && typeof val === 'object' && 'low' in val) {
+                    maxId = Number(val.low);
+                } else {
+                    maxId = Number(val);
+                }
+            } else if (nextTokenIdResult && typeof nextTokenIdResult === 'object' && 'low' in nextTokenIdResult) {
+                maxId = Number(nextTokenIdResult.low);
+            } else {
+                maxId = Number(nextTokenIdResult);
+            }
+
+            for (let i = 1; i < maxId; i++) {
                 try {
-                    const ownerResult = await contract.call('owner_of', [{ low: BigInt(i), high: 0n }])
+                    const ownerResult = await contract.call('owner_of', [{ low: BigInt(i), high: 0n }]);
                     if (ownerResult) {
                         // NFT exists, fetch its metadata
+                        let tokenUri = '';
+                        let metadata = null;
                         try {
-                            const tokenUriResult = await contract.call('token_uri', [{ low: BigInt(i), high: 0n }])
-                            const tokenUri = parseByteArray(tokenUriResult)
+                            const tokenUriResult = await contract.call('token_uri', [{ low: BigInt(i), high: 0n }]);
+                            tokenUri = parseByteArray(tokenUriResult);
 
-                            let metadata = null
                             if (tokenUri) {
-                                try {
-                                    // Handle different URI formats
-                                    let fetchUrl = tokenUri
-                                    if (tokenUri.startsWith('ipfs://')) {
-                                        fetchUrl = tokenUri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
-                                    } else if (tokenUri.includes('pinata.cloud') || tokenUri.includes('gateway.pinata')) {
-                                        fetchUrl = tokenUri
-                                    }
-
-                                    const response = await fetch(fetchUrl)
-                                    if (response.ok) {
-                                        metadata = await response.json()
-                                    }
-                                } catch (error) {
-                                    console.warn(`Failed to fetch metadata for NFT ${i}:`, error)
+                                let fetchUrl = tokenUri;
+                                if (tokenUri.startsWith('ipfs://')) {
+                                    fetchUrl = tokenUri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
+                                }
+                                const response = await fetch(fetchUrl);
+                                if (response.ok) {
+                                    metadata = await response.json();
                                 }
                             }
-
-                            nfts.push({
-                                tokenId: i,
-                                owner: ownerResult,
-                                tokenUri,
-                                metadata
-                            })
                         } catch (error) {
-                            console.warn(`Failed to fetch token URI for NFT ${i}:`, error)
+                            console.warn(`Failed to fetch token URI for NFT ${i}:`, error);
                         }
+
+                        nfts.push({
+                            tokenId: i,
+                            owner: ownerResult,
+                            tokenUri,
+                            metadata
+                        });
                     }
                 } catch (error) {
-                    // NFT doesn't exist, stop checking
-                    break
+                    // NFT doesn't exist (burned or never minted), just skip
+                    continue;
                 }
             }
 
-            setNftCollection(nfts)
+            setNftCollection(nfts);
         } catch (error) {
-            console.error('Error fetching NFT collection:', error)
+            console.error('Error fetching NFT collection:', error);
         } finally {
-            setLoadingNfts(false)
+            setLoadingNfts(false);
         }
     }
 
@@ -192,17 +197,6 @@ export default function TokenPage() {
         } catch (e) {
             console.warn('Error parsing ByteArray:', e, result)
             return ''
-        }
-    }
-
-    const fetchTransactionHistory = async () => {
-        try {
-            // TODO: Implement real transaction history fetching
-            // For now, we'll show empty transactions since we don't have event indexing
-            await new Promise(resolve => setTimeout(resolve, 500))
-            setTransactions([])
-        } catch (error) {
-            console.error('Failed to fetch transaction history:', error)
         }
     }
 
@@ -890,27 +884,6 @@ export default function TokenPage() {
                         </Card>
                     )}
 
-                    {/* Activity Card */}
-                    <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30">
-                        <div className="absolute inset-0 bg-gradient-to-r from-green-600/10 to-emerald-600/10"></div>
-                        <CardContent className="p-6 relative">
-                            <div className="text-center">
-                                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl mx-auto mb-4">
-                                    <Activity className="h-6 w-6 text-white" />
-                                </div>
-                                <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
-                                    Transactions
-                                </h3>
-                                <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-                                    {transactions.length}
-                                </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                    Total Activity
-                                </p>
-                            </div>
-                        </CardContent>
-                    </Card>
-
                     {/* Quick Actions */}
                     {!isERC20 && isConnected && (
                         <Card className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors bg-slate-50/50 dark:bg-slate-800/50">
@@ -939,112 +912,6 @@ export default function TokenPage() {
                     )}
                 </div>
             </div>
-
-            {/* Enhanced Transactions */}
-            <Card className="border-0 shadow-xl bg-white dark:bg-slate-800">
-                <CardHeader className="border-b border-slate-100 dark:border-slate-700">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-to-r from-slate-600 to-slate-800 rounded-xl flex items-center justify-center">
-                                <Activity className="h-5 w-5 text-white" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-xl">Recent Activity</CardTitle>
-                                <CardDescription>
-                                    Latest {isERC20 ? 'token transfers' : 'NFT transactions'} for this contract
-                                </CardDescription>
-                            </div>
-                        </div>
-
-                        {/* Refresh Button */}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={fetchTransactionHistory}
-                            className="hover:bg-slate-50 dark:hover:bg-slate-700"
-                        >
-                            <Activity className="h-4 w-4 mr-2" />
-                            Refresh
-                        </Button>
-                    </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    {transactions.length === 0 ? (
-                        <div className="text-center py-16">
-                            <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                <Activity className="h-10 w-10 text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                                No Activity Yet
-                            </h3>
-                            <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
-                                No transactions have been recorded for this token yet. Activity will appear here once transactions start happening.
-                            </p>
-                            {!isERC20 && isConnected && (
-                                <Button
-                                    onClick={() => setShowMintModal(true)}
-                                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Create First Activity
-                                </Button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                            {transactions.map((tx, index) => (
-                                <div
-                                    key={index}
-                                    className="p-6 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center space-x-4">
-                                            <div className="w-10 h-10 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-xl flex items-center justify-center">
-                                                {isERC20 ? (
-                                                    <Coins className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                                ) : (
-                                                    <ImageIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                                                )}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center space-x-2 mb-1">
-                                                    <code className="text-sm font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">
-                                                        {formatAddress(tx.hash)}
-                                                    </code>
-                                                    <a
-                                                        href={`https://sepolia.starkscan.co/tx/${tx.hash}`}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
-                                                    >
-                                                        <ExternalLink className="h-3 w-3" />
-                                                    </a>
-                                                </div>
-                                                <div className="text-sm text-slate-600 dark:text-slate-400">
-                                                    <span className="font-medium">{formatAddress(tx.from)}</span>
-                                                    <span className="mx-2">→</span>
-                                                    <span className="font-medium">{formatAddress(tx.to)}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
-                                                {tx.amount && tokenData.type === 'ERC20'
-                                                    ? `${formatAmount(tx.amount, (tokenData as ERC20TokenData).decimals)} ${tokenData.symbol}`
-                                                    : `NFT #${tx.token_id}`
-                                                }
-                                            </div>
-                                            <div className="text-xs text-slate-500 dark:text-slate-400">
-                                                {formatDate(tx.timestamp)}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
 
             {/* Mint NFT Modal */}
             <Dialog open={showMintModal} onOpenChange={setShowMintModal}>
