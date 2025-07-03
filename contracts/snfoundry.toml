@@ -12,6 +12,6 @@
 
 
 [sncast.sepolia]
-account = "myaccount"
+account = "walkscape_deployer"
 accounts-file = "/Users/mac/.starknet_accounts/starknet_open_zeppelin_accounts.json"
 url = "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/kwgGr9GGk4YyLXuGfEvpITv1jpvn3PgP"

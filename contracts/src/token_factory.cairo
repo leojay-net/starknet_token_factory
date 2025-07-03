@@ -20,7 +20,7 @@ pub trait ITokenFactory<TContractState> {
     ) -> ContractAddress;
 
     fn create_erc721(
-        ref self: TContractState, name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
+        ref self: TContractState, name: ByteArray, symbol: ByteArray,
     ) -> ContractAddress;
 
     fn get_created_tokens(self: @TContractState, creator: ContractAddress) -> Array<TokenInfo>;
@@ -113,7 +113,7 @@ pub mod TokenFactory {
         }
 
         fn create_erc721(
-            ref self: ContractState, name: ByteArray, symbol: ByteArray, base_uri: ByteArray,
+            ref self: ContractState, name: ByteArray, symbol: ByteArray,
         ) -> ContractAddress {
             let creator = get_caller_address();
             let class_hash = self.erc721_class_hash.read();
@@ -121,7 +121,6 @@ pub mod TokenFactory {
             let mut calldata = array![];
             name.serialize(ref calldata);
             symbol.serialize(ref calldata);
-            base_uri.serialize(ref calldata);
             creator.serialize(ref calldata);
 
             let (token_address, _) = deploy_syscall(class_hash, 0, calldata.span(), false).unwrap();

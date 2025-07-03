@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -11,23 +11,133 @@ import {
     Activity,
     Coins,
     Palette,
-    Image as ImageIcon
+    Image as ImageIcon,
+    Plus,
+    Loader2
 } from 'lucide-react'
 import Link from 'next/link'
 import { ERC20TokenData, ERC721TokenData, TokenTransaction } from '@/types'
 import { useTokenData } from '@/hooks/useTokenData'
+import { useWallet } from '@/contexts/WalletContext'
+import { useToast } from '@/components/ui/toaster'
+import { getERC721Contract, encodeByteArrayForCallData, provider } from '@/lib/starknet'
+import { CallData } from 'starknet'
 
 export default function TokenPage() {
     const params = useParams()
     const tokenAddress = params.address as string
     const { tokenData, loading, error } = useTokenData(tokenAddress)
+    const { account, address, isConnected } = useWallet()
+    const { addToast } = useToast()
     const [transactions, setTransactions] = useState<TokenTransaction[]>([])
+    const [nftCollection, setNftCollection] = useState<any[]>([])
+    const [loadingNfts, setLoadingNfts] = useState(false)
+
+    // Minting state
+    const [showMintForm, setShowMintForm] = useState(false)
+    const [isMinting, setIsMinting] = useState(false)
+    const [mintFormData, setMintFormData] = useState({
+        name: '',
+        description: '',
+        recipient: address || ''
+    })
+    const [nftImage, setNftImage] = useState<File | null>(null)
+    const [nftImageUrl, setNftImageUrl] = useState<string>("")
+    const [uploadingImage, setUploadingImage] = useState(false)
+    const [uploadingMetadata, setUploadingMetadata] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement | null>(null)
 
     useEffect(() => {
         if (tokenAddress) {
             fetchTransactionHistory()
+            if (tokenData && tokenData.type === 'ERC721') {
+                fetchNftCollection()
+            }
         }
-    }, [tokenAddress])
+    }, [tokenAddress, tokenData])
+
+    const fetchNftCollection = async () => {
+        if (!tokenData || tokenData.type !== 'ERC721') return
+
+        setLoadingNfts(true)
+        try {
+            const contract = getERC721Contract(tokenAddress)
+            const nfts = []
+
+            // Try to fetch NFTs (assuming sequential token IDs starting from 1)
+            for (let i = 1; i <= 10; i++) { // Check first 10 NFTs
+                try {
+                    const ownerResult = await contract.call('owner_of', [{ low: BigInt(i), high: 0n }])
+                    if (ownerResult) {
+                        // NFT exists, fetch its metadata
+                        try {
+                            const tokenUriResult = await contract.call('token_uri', [{ low: BigInt(i), high: 0n }])
+                            const tokenUri = parseByteArray(tokenUriResult)
+
+                            let metadata = null
+                            if (tokenUri) {
+                                try {
+                                    // Handle different URI formats
+                                    let fetchUrl = tokenUri
+                                    if (tokenUri.startsWith('ipfs://')) {
+                                        fetchUrl = tokenUri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                    } else if (tokenUri.includes('pinata.cloud') || tokenUri.includes('gateway.pinata')) {
+                                        fetchUrl = tokenUri
+                                    }
+
+                                    const response = await fetch(fetchUrl)
+                                    if (response.ok) {
+                                        metadata = await response.json()
+                                    }
+                                } catch (error) {
+                                    console.warn(`Failed to fetch metadata for NFT ${i}:`, error)
+                                }
+                            }
+
+                            nfts.push({
+                                tokenId: i,
+                                owner: ownerResult,
+                                tokenUri,
+                                metadata
+                            })
+                        } catch (error) {
+                            console.warn(`Failed to fetch token URI for NFT ${i}:`, error)
+                        }
+                    }
+                } catch (error) {
+                    // NFT doesn't exist, stop checking
+                    break
+                }
+            }
+
+            setNftCollection(nfts)
+        } catch (error) {
+            console.error('Error fetching NFT collection:', error)
+        } finally {
+            setLoadingNfts(false)
+        }
+    }
+
+    // Helper function to parse ByteArray
+    const parseByteArray = (result: any): string => {
+        try {
+            if (typeof result === 'string') {
+                return result
+            }
+            if (result?.data?.[0]) {
+                const hexString = result.data[0].replace('0x', '')
+                return Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '')
+            }
+            if (Array.isArray(result) && result.length > 0) {
+                const hexString = result[0].replace('0x', '')
+                return Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '')
+            }
+            return ''
+        } catch (e) {
+            console.warn('Error parsing ByteArray:', e, result)
+            return ''
+        }
+    }
 
     const fetchTransactionHistory = async () => {
         try {
@@ -58,7 +168,193 @@ export default function TokenPage() {
 
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
-        // TODO: Add toast notification
+        addToast({
+            title: 'Copied',
+            description: 'Address copied to clipboard',
+        })
+    }
+
+    // Minting functions
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null
+        setNftImage(file)
+
+        if (file) {
+            await uploadNftImage(file)
+        } else {
+            setNftImageUrl("")
+        }
+    }
+
+    const uploadNftImage = async (file: File) => {
+        if (!file) return ""
+        setUploadingImage(true)
+        try {
+            const data = new FormData()
+            data.set("file", file)
+            const uploadRequest = await fetch("/api/files", {
+                method: "POST",
+                body: data,
+            })
+            const response = await uploadRequest.json()
+
+            // Ensure we get a proper IPFS URL
+            let url = response
+            if (typeof response === 'object' && response.url) {
+                url = response.url
+            }
+
+            // Convert to proper IPFS gateway URL if needed
+            if (url.includes('gateway.pinata.cloud')) {
+                setNftImageUrl(url)
+                return url
+            } else if (url.startsWith('ipfs://')) {
+                const gatewayUrl = url.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                setNftImageUrl(gatewayUrl)
+                return gatewayUrl
+            } else {
+                setNftImageUrl(url)
+                return url
+            }
+        } catch (error) {
+            console.error('Error uploading image:', error)
+            addToast({
+                title: 'Upload Error',
+                description: 'Failed to upload image. Please try again.',
+                variant: 'destructive',
+            })
+            return ""
+        } finally {
+            setUploadingImage(false)
+        }
+    }
+
+    const uploadMetadata = async (metadata: any) => {
+        try {
+            const data = new FormData()
+            const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+            data.set("file", metadataBlob, "metadata.json")
+
+            const uploadRequest = await fetch("/api/files", {
+                method: "POST",
+                body: data,
+            })
+            const response = await uploadRequest.json()
+
+            // Ensure we get a proper IPFS URL
+            let url = response
+            if (typeof response === 'object' && response.url) {
+                url = response.url
+            }
+
+            // Return the proper IPFS URL
+            if (url.includes('gateway.pinata.cloud')) {
+                return url
+            } else if (url.startsWith('ipfs://')) {
+                return url.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+            } else {
+                return url
+            }
+        } catch (error) {
+            console.error('Error uploading metadata:', error)
+            addToast({
+                title: 'Upload Error',
+                description: 'Failed to upload metadata. Please try again.',
+                variant: 'destructive',
+            })
+            return ""
+        }
+    }
+
+    const handleMintNFT = async () => {
+        if (!account || !isConnected) {
+            addToast({
+                title: 'Error',
+                description: 'Please connect your wallet first.',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        if (!nftImageUrl) {
+            addToast({
+                title: 'Error',
+                description: 'Please upload an image first.',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        if (!mintFormData.name || !mintFormData.description) {
+            addToast({
+                title: 'Error',
+                description: 'Please fill in all required fields.',
+                variant: 'destructive',
+            })
+            return
+        }
+
+        setIsMinting(true)
+        try {
+            // Create metadata JSON
+            const metadata = {
+                name: mintFormData.name,
+                description: mintFormData.description,
+                image: nftImageUrl,
+                attributes: []
+            }
+
+            // Upload metadata to IPFS
+            setUploadingMetadata(true)
+            const metadataUri = await uploadMetadata(metadata)
+            setUploadingMetadata(false)
+
+            if (!metadataUri) {
+                throw new Error('Failed to upload metadata to IPFS')
+            }
+
+            // Mint the NFT
+            const contract = getERC721Contract(tokenAddress, account)
+            const calldata = CallData.compile({
+                to: mintFormData.recipient,
+                token_uri: encodeByteArrayForCallData(metadataUri)
+            })
+
+            const result = await contract.invoke('mint', calldata)
+            console.log('NFT minted:', result)
+
+            // Wait for transaction confirmation
+            await provider.waitForTransaction(result.transaction_hash)
+
+            addToast({
+                title: 'Success!',
+                description: `NFT "${mintFormData.name}" has been minted successfully!`,
+            })
+
+            // Reset form
+            setMintFormData({
+                name: '',
+                description: '',
+                recipient: address || ''
+            })
+            setNftImage(null)
+            setNftImageUrl("")
+            setShowMintForm(false)
+
+            // Refresh NFT collection to show the new NFT
+            await fetchNftCollection()
+
+        } catch (error) {
+            console.error('Error minting NFT:', error)
+            addToast({
+                title: 'Error',
+                description: 'Failed to mint NFT. Please try again.',
+                variant: 'destructive',
+            })
+        } finally {
+            setIsMinting(false)
+            setUploadingMetadata(false)
+        }
     }
 
     if (loading) {
@@ -120,281 +416,682 @@ export default function TokenPage() {
 
     return (
         <div className="container mx-auto px-4 py-8">
-            {/* Header */}
-            <div className="flex items-center space-x-4 mb-8">
-                <Link href="/explorer">
-                    <Button variant="outline" size="sm">
-                        <ArrowLeft className="h-4 w-4 mr-2" />
-                        Back to Explorer
-                    </Button>
-                </Link>
+            {/* Enhanced Header */}
+            <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center space-x-4">
+                    <Link href="/explorer">
+                        <Button variant="outline" size="sm" className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <ArrowLeft className="h-4 w-4 mr-2" />
+                            Back to Explorer
+                        </Button>
+                    </Link>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                    {/* Network Badge */}
+                    <div className="hidden sm:flex items-center space-x-2 px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full text-sm font-medium">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <span>Starknet Sepolia</span>
+                    </div>
+                </div>
             </div>
 
-            {/* Token Info */}
+            {/* Enhanced Token Info */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 <div className="lg:col-span-2">
-                    <Card>
-                        <CardHeader>
+                    <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900">
+                        {/* Background Pattern */}
+                        <div className="absolute inset-0 bg-grid-slate-100 dark:bg-grid-slate-700/25 [mask-image:linear-gradient(0deg,transparent,black)] opacity-10"></div>
+
+                        <CardHeader className="relative">
                             <div className="flex items-start justify-between">
-                                <div className="flex items-center space-x-4">
-                                    <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
-                                        {isERC20 ? (
-                                            <Coins className="h-8 w-8 text-white" />
-                                        ) : (
-                                            <Palette className="h-8 w-8 text-white" />
-                                        )}
+                                <div className="flex items-center space-x-6">
+                                    <div className="relative">
+                                        <div className={`w-20 h-20 bg-gradient-to-r ${isERC20
+                                                ? 'from-yellow-400 via-orange-500 to-red-500'
+                                                : 'from-blue-600 via-purple-600 to-indigo-600'
+                                            } rounded-2xl flex items-center justify-center shadow-lg`}>
+                                            {isERC20 ? (
+                                                <Coins className="h-10 w-10 text-white" />
+                                            ) : (
+                                                <Palette className="h-10 w-10 text-white" />
+                                            )}
+                                        </div>
+                                        {/* Floating particles effect */}
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-ping"></div>
+                                        <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
                                     </div>
                                     <div>
-                                        <CardTitle className="text-2xl">{tokenData.name}</CardTitle>
-                                        <CardDescription className="text-lg">
-                                            {tokenData.symbol} • {isERC20 ? 'ERC20 Token' : 'ERC721 NFT Collection'}
+                                        <CardTitle className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                                            {tokenData.name}
+                                        </CardTitle>
+                                        <CardDescription className="text-xl mt-2 flex items-center space-x-3">
+                                            <span className="font-semibold text-slate-700 dark:text-slate-300">{tokenData.symbol}</span>
+                                            <span className="text-slate-400">•</span>
+                                            <div className={`px-3 py-1 rounded-full text-sm font-medium ${isERC20
+                                                    ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
+                                                    : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                                }`}>
+                                                {isERC20 ? 'ERC20 Token' : 'ERC721 Collection'}
+                                            </div>
                                         </CardDescription>
                                     </div>
                                 </div>
                             </div>
                         </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                        Contract Address
+                        <CardContent className="relative">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* Contract Address */}
+                                <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                            Contract Address
+                                        </span>
+                                        <div className="flex items-center space-x-2">
+                                            <button
+                                                onClick={() => copyToClipboard(tokenData.address)}
+                                                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </button>
+                                            <a
+                                                href={`https://sepolia.starkscan.co/contract/${tokenData.address}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                                            >
+                                                <ExternalLink className="h-4 w-4" />
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <code className="text-sm font-mono text-slate-900 dark:text-white block mt-2">
+                                        {formatAddress(tokenData.address)}
+                                    </code>
+                                </div>
+
+                                {/* Token Type */}
+                                <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
+                                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                                        Token Standard
                                     </span>
-                                    <div className="flex items-center space-x-2">
-                                        <code className="text-sm font-mono text-slate-900 dark:text-white">
-                                            {formatAddress(tokenData.address)}
-                                        </code>
-                                        <button
-                                            onClick={() => copyToClipboard(tokenData.address)}
-                                            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                                        >
-                                            <Copy className="h-4 w-4" />
-                                        </button>
-                                        <a
-                                            href={`https://sepolia.starkscan.co/contract/${tokenData.address}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                                        >
-                                            <ExternalLink className="h-4 w-4" />
-                                        </a>
+                                    <div className="flex items-center space-x-2 mt-2">
+                                        <span className="text-sm font-bold text-slate-900 dark:text-white">
+                                            {isERC20 ? 'ERC20' : 'ERC721'}
+                                        </span>
+                                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                                            ({isERC20 ? 'Fungible' : 'Non-Fungible'})
+                                        </span>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                        Token Type
-                                    </span>
-                                    <span className="text-sm text-slate-900 dark:text-white">
-                                        {isERC20 ? 'ERC20 (Fungible)' : 'ERC721 (NFT)'}
-                                    </span>
-                                </div>
-
+                                {/* Conditional Fields */}
                                 {isERC20 && tokenData.type === 'ERC20' && (
-                                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                    <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
+                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
                                             Decimals
                                         </span>
-                                        <span className="text-sm text-slate-900 dark:text-white">
+                                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-2">
                                             {(tokenData as ERC20TokenData).decimals}
                                         </span>
                                     </div>
                                 )}
 
                                 {!isERC20 && tokenData.type === 'ERC721' && (
-                                    <>
-                                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                Base URI
-                                            </span>
-                                            <code className="text-sm font-mono text-slate-900 dark:text-white">
-                                                {erc721Data.baseUri || 'Not available'}
-                                            </code>
-                                        </div>
-                                        {erc721Data.tokenUri && (
-                                            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                                    Token URI (ID 1)
-                                                </span>
-                                                <code className="text-sm font-mono text-slate-900 dark:text-white">
-                                                    {erc721Data.tokenUri}
-                                                </code>
-                                            </div>
-                                        )}
-                                    </>
+                                    <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
+                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                                            Base URI
+                                        </span>
+                                        <code className="text-xs font-mono text-slate-900 dark:text-white block mt-2 break-all">
+                                            {erc721Data.baseUri || 'Not set'}
+                                        </code>
+                                    </div>
                                 )}
                             </div>
                         </CardContent>
                     </Card>
 
-                    {/* NFT Preview Section */}
-                    {!isERC20 && erc721Data.metadata && (
+                    {/* NFT Collection Gallery */}
+                    {!isERC20 && (
                         <Card className="mt-6">
                             <CardHeader>
                                 <CardTitle className="flex items-center space-x-2">
                                     <ImageIcon className="h-5 w-5" />
-                                    <span>NFT Preview</span>
+                                    <span>NFT Collection</span>
                                 </CardTitle>
                                 <CardDescription>
-                                    Metadata for the first NFT in this collection
+                                    All NFTs minted from this collection
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* NFT Image */}
-                                    {erc721Data.metadata.image && (
-                                        <div className="space-y-3">
-                                            <h4 className="font-medium text-slate-900 dark:text-white">Image</h4>
-                                            <div className="relative">
-                                                <img
-                                                    src={erc721Data.metadata.image}
-                                                    alt={erc721Data.metadata.name || 'NFT Preview'}
-                                                    className="w-full h-auto rounded-lg border border-slate-200 dark:border-slate-600 max-h-96 object-contain"
-                                                    onError={(e) => {
-                                                        const target = e.target as HTMLImageElement;
-                                                        target.style.display = 'none';
-                                                    }}
+                                {loadingNfts ? (
+                                    <div className="flex items-center justify-center py-12">
+                                        <div className="text-center">
+                                            <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+                                            <p className="text-slate-600 dark:text-slate-400">Loading NFTs...</p>
+                                        </div>
+                                    </div>
+                                ) : nftCollection.length === 0 ? (
+                                    <div className="text-center py-12">
+                                        <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600">
+                                            <ImageIcon className="h-10 w-10 text-slate-400 dark:text-slate-500" />
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                                            No NFTs Minted Yet
+                                        </h3>
+                                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                                            This collection doesn't have any NFTs yet. Be the first to mint one!
+                                        </p>
+                                        {isConnected && (
+                                            <Button
+                                                onClick={() => setShowMintForm(true)}
+                                                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                                            >
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                Mint First NFT
+                                            </Button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                        {nftCollection.map((nft) => (
+                                            <div
+                                                key={nft.tokenId}
+                                                className="group relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1"
+                                            >
+                                                {/* NFT Image */}
+                                                <div className="aspect-square bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 relative overflow-hidden">
+                                                    {nft.metadata?.image ? (
+                                                        <img
+                                                            src={nft.metadata.image.includes('gateway.pinata.cloud') ?
+                                                                nft.metadata.image :
+                                                                nft.metadata.image.startsWith('ipfs://') ?
+                                                                    nft.metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/') :
+                                                                    nft.metadata.image
+                                                            }
+                                                            alt={nft.metadata?.name || `NFT #${nft.tokenId}`}
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                                            onError={(e) => {
+                                                                const target = e.target as HTMLImageElement;
+                                                                target.style.display = 'none';
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center">
+                                                            <ImageIcon className="h-12 w-12 text-slate-400" />
+                                                        </div>
+                                                    )}
+
+                                                    {/* Token ID Badge */}
+                                                    <div className="absolute top-3 left-3">
+                                                        <div className="bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded-lg text-xs font-medium">
+                                                            #{nft.tokenId}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* NFT Info */}
+                                                <div className="p-4">
+                                                    <h4 className="font-semibold text-slate-900 dark:text-white mb-1 truncate">
+                                                        {nft.metadata?.name || `NFT #${nft.tokenId}`}
+                                                    </h4>
+                                                    {nft.metadata?.description && (
+                                                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-3 line-clamp-2">
+                                                            {nft.metadata.description}
+                                                        </p>
+                                                    )}
+
+                                                    {/* Owner */}
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-slate-500 dark:text-slate-400">Owner:</span>
+                                                        <code className="text-slate-700 dark:text-slate-300 font-mono">
+                                                            {formatAddress(nft.owner)}
+                                                        </code>
+                                                    </div>
+
+                                                    {/* Attributes */}
+                                                    {nft.metadata?.attributes && nft.metadata.attributes.length > 0 && (
+                                                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {nft.metadata.attributes.slice(0, 2).map((attr: any, index: number) => (
+                                                                    <div
+                                                                        key={index}
+                                                                        className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-xs"
+                                                                    >
+                                                                        <span className="text-slate-500 dark:text-slate-400">{attr.trait_type}:</span>
+                                                                        <span className="text-slate-700 dark:text-slate-300 ml-1 font-medium">{attr.value}</span>
+                                                                    </div>
+                                                                ))}
+                                                                {nft.metadata.attributes.length > 2 && (
+                                                                    <div className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-xs text-slate-500 dark:text-slate-400">
+                                                                        +{nft.metadata.attributes.length - 2} more
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Enhanced Minting Section for ERC721 */}
+                    {!isERC20 && isConnected && (
+                        <Card className="mt-6 border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors">
+                            <CardHeader>
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                                            <Plus className="h-5 w-5 text-white" />
+                                        </div>
+                                        <div>
+                                            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                                Mint NFT
+                                            </span>
+                                            <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                                                Create a unique digital asset
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {!showMintForm && (
+                                        <Button
+                                            onClick={() => setShowMintForm(true)}
+                                            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                                            size="lg"
+                                        >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            Start Minting
+                                        </Button>
+                                    )}
+                                </CardTitle>
+                            </CardHeader>
+                            {showMintForm && (
+                                <CardContent className="space-y-8">
+                                    {/* Form Header */}
+                                    <div className="text-center py-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
+                                        <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                            <Palette className="h-8 w-8 text-white" />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                                            Create Your NFT
+                                        </h3>
+                                        <p className="text-slate-600 dark:text-slate-400">
+                                            Upload an image and add metadata to mint your unique NFT
+                                        </p>
+                                    </div>
+
+                                    {/* Form Fields */}
+                                    <div className="space-y-6">
+                                        {/* Basic Info */}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="space-y-2">
+                                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                    NFT Name *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={mintFormData.name}
+                                                    onChange={(e) => setMintFormData(prev => ({ ...prev, name: e.target.value }))}
+                                                    placeholder="e.g., Cosmic Dragon #001"
+                                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-medium"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                    Recipient Address
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={mintFormData.recipient}
+                                                    onChange={(e) => setMintFormData(prev => ({ ...prev, recipient: e.target.value }))}
+                                                    placeholder="0x..."
+                                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono text-sm"
+                                                    required
                                                 />
                                             </div>
                                         </div>
-                                    )}
 
-                                    {/* NFT Metadata */}
-                                    <div className="space-y-3">
-                                        <h4 className="font-medium text-slate-900 dark:text-white">Metadata</h4>
+                                        {/* Description */}
                                         <div className="space-y-2">
-                                            {erc721Data.metadata.name && (
-                                                <div className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
-                                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Name:</span>
-                                                    <span className="text-sm text-slate-900 dark:text-white">{erc721Data.metadata.name}</span>
+                                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                Description *
+                                            </label>
+                                            <textarea
+                                                value={mintFormData.description}
+                                                onChange={(e) => setMintFormData(prev => ({ ...prev, description: e.target.value }))}
+                                                placeholder="Describe what makes this NFT special..."
+                                                rows={4}
+                                                className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Image Upload */}
+                                        <div className="space-y-3">
+                                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                                Upload NFT Image *
+                                            </label>
+
+                                            {/* Upload Area */}
+                                            <div className="relative">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleImageChange}
+                                                    ref={fileInputRef}
+                                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                    required
+                                                />
+                                                <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-slate-50 dark:bg-slate-800/50">
+                                                    <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                                        <ImageIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                                    </div>
+                                                    <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                                                        Choose your NFT image
+                                                    </h4>
+                                                    <p className="text-slate-600 dark:text-slate-400 mb-2">
+                                                        PNG, JPG, GIF up to 10MB
+                                                    </p>
+                                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                        Click or drag and drop your file here
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            {/* Upload Status */}
+                                            {uploadingImage && (
+                                                <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700">
+                                                    <div className="flex items-center space-x-3">
+                                                        <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                                        <div>
+                                                            <p className="font-medium text-blue-900 dark:text-blue-100">Uploading to IPFS...</p>
+                                                            <p className="text-sm text-blue-700 dark:text-blue-300">This may take a few moments</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
-                                            {erc721Data.metadata.description && (
-                                                <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
-                                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400 block mb-1">Description:</span>
-                                                    <span className="text-sm text-slate-900 dark:text-white">{erc721Data.metadata.description}</span>
+
+                                            {uploadingMetadata && (
+                                                <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl border border-purple-200 dark:border-purple-700">
+                                                    <div className="flex items-center space-x-3">
+                                                        <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                                                        <div>
+                                                            <p className="font-medium text-purple-900 dark:text-purple-100">Creating metadata...</p>
+                                                            <p className="text-sm text-purple-700 dark:text-purple-300">Preparing your NFT data</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
-                                            {erc721Data.metadata.external_url && (
-                                                <div className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
-                                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">External URL:</span>
-                                                    <a
-                                                        href={erc721Data.metadata.external_url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                                                    >
-                                                        <ExternalLink className="h-3 w-3 inline mr-1" />
-                                                        View
-                                                    </a>
+
+                                            {/* Image Preview */}
+                                            {nftImageUrl && !uploadingImage && (
+                                                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-800/30 rounded-xl border border-green-200 dark:border-green-700">
+                                                    <div className="flex items-start space-x-4">
+                                                        <div className="flex-shrink-0">
+                                                            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <p className="font-medium text-green-900 dark:text-green-100 mb-3">
+                                                                ✅ Image uploaded successfully!
+                                                            </p>
+                                                            <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-green-200 dark:border-green-700">
+                                                                <img
+                                                                    src={nftImageUrl}
+                                                                    alt="NFT Preview"
+                                                                    className="w-full h-auto rounded-lg max-h-64 object-contain"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
                                         </div>
 
-                                        {/* Attributes */}
-                                        {erc721Data.metadata.attributes && erc721Data.metadata.attributes.length > 0 && (
-                                            <div className="space-y-2">
-                                                <h5 className="font-medium text-slate-900 dark:text-white">Attributes</h5>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {erc721Data.metadata.attributes.map((attr, index) => (
-                                                        <div key={index} className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-center">
-                                                            <div className="text-xs text-slate-500 dark:text-slate-400">{attr.trait_type}</div>
-                                                            <div className="text-sm font-medium text-slate-900 dark:text-white">{attr.value}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* Action Buttons */}
+                                        <div className="flex space-x-4 pt-6">
+                                            <Button
+                                                onClick={handleMintNFT}
+                                                disabled={isMinting || uploadingImage || uploadingMetadata || !nftImageUrl}
+                                                className="flex-1 h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-semibold"
+                                                size="lg"
+                                            >
+                                                {isMinting ? (
+                                                    <>
+                                                        <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                                                        Minting NFT...
+                                                    </>
+                                                ) : uploadingMetadata ? (
+                                                    <>
+                                                        <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                                                        Preparing...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Palette className="w-5 h-5 mr-3" />
+                                                        Mint NFT
+                                                    </>
+                                                )}
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => setShowMintForm(false)}
+                                                disabled={isMinting || uploadingImage || uploadingMetadata}
+                                                className="h-14 px-8 border-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                                size="lg"
+                                            >
+                                                Cancel
+                                            </Button>
+                                        </div>
                                     </div>
-                                </div>
-                            </CardContent>
+                                </CardContent>
+                            )}
                         </Card>
                     )}
                 </div>
 
-                {/* Stats */}
+                {/* Enhanced Stats */}
                 <div className="space-y-6">
-                    <Card>
-                        <CardContent className="p-6">
+                    {/* Total Supply Card */}
+                    <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/30">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10"></div>
+                        <CardContent className="p-6 relative">
                             <div className="text-center">
-                                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
+                                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl mx-auto mb-4">
+                                    <Coins className="h-6 w-6 text-white" />
+                                </div>
+                                <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
                                     Total Supply
                                 </h3>
-                                <p className="text-3xl font-bold text-slate-900 dark:text-white">
+                                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                                     {(() => {
                                         if (tokenData.type === 'ERC20') {
                                             const erc20Data = tokenData as ERC20TokenData;
                                             return formatAmount(erc20Data.totalSupply.toString(), erc20Data.decimals);
                                         }
-                                        return 'N/A';
+                                        return nftCollection.length;
                                     })()}
+                                </p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    {isERC20 ? 'Tokens' : 'NFTs Minted'}
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardContent className="p-6">
+                    {/* Collection Stats for NFTs */}
+                    {!isERC20 && (
+                        <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/30">
+                            <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-pink-600/10"></div>
+                            <CardContent className="p-6 relative">
+                                <div className="text-center">
+                                    <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl mx-auto mb-4">
+                                        <ImageIcon className="h-6 w-6 text-white" />
+                                    </div>
+                                    <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
+                                        Collection Size
+                                    </h3>
+                                    <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                                        {nftCollection.length}
+                                    </p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                        Unique NFTs
+                                    </p>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Activity Card */}
+                    <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30">
+                        <div className="absolute inset-0 bg-gradient-to-r from-green-600/10 to-emerald-600/10"></div>
+                        <CardContent className="p-6 relative">
                             <div className="text-center">
-                                <h3 className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-2">
-                                    Total Transactions
+                                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl mx-auto mb-4">
+                                    <Activity className="h-6 w-6 text-white" />
+                                </div>
+                                <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
+                                    Transactions
                                 </h3>
-                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
+                                <p className="text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                                     {transactions.length}
+                                </p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                    Total Activity
                                 </p>
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* Quick Actions */}
+                    {!isERC20 && isConnected && (
+                        <Card className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors bg-slate-50/50 dark:bg-slate-800/50">
+                            <CardContent className="p-6">
+                                <div className="text-center">
+                                    <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                                        <Plus className="h-6 w-6 text-white" />
+                                    </div>
+                                    <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
+                                        Quick Mint
+                                    </h3>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                                        Create a new NFT instantly
+                                    </p>
+                                    <Button
+                                        onClick={() => setShowMintForm(true)}
+                                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                                        size="sm"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Mint NFT
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
 
-            {/* Transactions */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Recent Transactions</CardTitle>
-                    <CardDescription>
-                        Latest {isERC20 ? 'transfers' : 'NFT transfers'} for this token
-                    </CardDescription>
+            {/* Enhanced Transactions */}
+            <Card className="border-0 shadow-xl bg-white dark:bg-slate-800">
+                <CardHeader className="border-b border-slate-100 dark:border-slate-700">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-gradient-to-r from-slate-600 to-slate-800 rounded-xl flex items-center justify-center">
+                                <Activity className="h-5 w-5 text-white" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-xl">Recent Activity</CardTitle>
+                                <CardDescription>
+                                    Latest {isERC20 ? 'token transfers' : 'NFT transactions'} for this contract
+                                </CardDescription>
+                            </div>
+                        </div>
+
+                        {/* Refresh Button */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={fetchTransactionHistory}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-700"
+                        >
+                            <Activity className="h-4 w-4 mr-2" />
+                            Refresh
+                        </Button>
+                    </div>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="p-0">
                     {transactions.length === 0 ? (
-                        <div className="text-center py-8">
-                            <Activity className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-                            <p className="text-slate-600 dark:text-slate-400">No transactions found</p>
+                        <div className="text-center py-16">
+                            <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                <Activity className="h-10 w-10 text-slate-400" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                                No Activity Yet
+                            </h3>
+                            <p className="text-slate-600 dark:text-slate-400 mb-6 max-w-md mx-auto">
+                                No transactions have been recorded for this token yet. Activity will appear here once transactions start happening.
+                            </p>
+                            {!isERC20 && isConnected && (
+                                <Button
+                                    onClick={() => setShowMintForm(true)}
+                                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Create First Activity
+                                </Button>
+                            )}
                         </div>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="divide-y divide-slate-100 dark:divide-slate-700">
                             {transactions.map((tx, index) => (
                                 <div
                                     key={index}
-                                    className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-lg"
+                                    className="p-6 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                                 >
-                                    <div className="space-y-1">
-                                        <div className="flex items-center space-x-2">
-                                            <code className="text-sm font-mono text-blue-600 dark:text-blue-400">
-                                                {formatAddress(tx.hash)}
-                                            </code>
-                                            <a
-                                                href={`https://sepolia.starkscan.co/tx/${tx.hash}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                                            >
-                                                <ExternalLink className="h-3 w-3" />
-                                            </a>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center space-x-4">
+                                            <div className="w-10 h-10 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-xl flex items-center justify-center">
+                                                {isERC20 ? (
+                                                    <Coins className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                                ) : (
+                                                    <ImageIcon className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center space-x-2 mb-1">
+                                                    <code className="text-sm font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded">
+                                                        {formatAddress(tx.hash)}
+                                                    </code>
+                                                    <a
+                                                        href={`https://sepolia.starkscan.co/tx/${tx.hash}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded"
+                                                    >
+                                                        <ExternalLink className="h-3 w-3" />
+                                                    </a>
+                                                </div>
+                                                <div className="text-sm text-slate-600 dark:text-slate-400">
+                                                    <span className="font-medium">{formatAddress(tx.from)}</span>
+                                                    <span className="mx-2">→</span>
+                                                    <span className="font-medium">{formatAddress(tx.to)}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-slate-600 dark:text-slate-400">
-                                            From {formatAddress(tx.from)} to {formatAddress(tx.to)}
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-sm font-medium text-slate-900 dark:text-white">
-                                            {tx.amount && tokenData.type === 'ERC20'
-                                                ? `${formatAmount(tx.amount, (tokenData as ERC20TokenData).decimals)} ${tokenData.symbol}`
-                                                : `Token #${tx.token_id}`
-                                            }
-                                        </div>
-                                        <div className="text-xs text-slate-500 dark:text-slate-400">
-                                            {formatDate(tx.timestamp)}
+                                        <div className="text-right">
+                                            <div className="text-sm font-semibold text-slate-900 dark:text-white mb-1">
+                                                {tx.amount && tokenData.type === 'ERC20'
+                                                    ? `${formatAmount(tx.amount, (tokenData as ERC20TokenData).decimals)} ${tokenData.symbol}`
+                                                    : `NFT #${tx.token_id}`
+                                                }
+                                            </div>
+                                            <div className="text-xs text-slate-500 dark:text-slate-400">
+                                                {formatDate(tx.timestamp)}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

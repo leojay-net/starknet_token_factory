@@ -17,6 +17,7 @@ export interface ERC20TokenData {
 
 export interface NFTMetadata {
     name?: string;
+    symbol?: string;
     description?: string;
     image?: string;
     external_url?: string;

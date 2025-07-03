@@ -105,7 +105,7 @@ export function useTokenData(tokenAddress: string) {
                         // Try to get token URI for token ID 1 (first NFT)
                         let tokenUri = '';
                         let metadata: NFTMetadata | undefined;
-                        
+
                         try {
                             // Try to get token URI for the first token (ID 1)
                             const tokenUriResult = await erc721Contract.call('token_uri', [{ low: 1n, high: 0n }]);
@@ -115,7 +115,15 @@ export function useTokenData(tokenAddress: string) {
                             // If we have a token URI, try to fetch metadata
                             if (tokenUri) {
                                 try {
-                                    const metadataResponse = await fetch(tokenUri);
+                                    // Handle different URI formats
+                                    let fetchUrl = tokenUri
+                                    if (tokenUri.startsWith('ipfs://')) {
+                                        fetchUrl = tokenUri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                    } else if (tokenUri.includes('gateway.pinata.cloud')) {
+                                        fetchUrl = tokenUri
+                                    }
+
+                                    const metadataResponse = await fetch(fetchUrl);
                                     if (metadataResponse.ok) {
                                         metadata = await metadataResponse.json();
                                         console.log('Fetched metadata:', metadata);
@@ -125,7 +133,33 @@ export function useTokenData(tokenAddress: string) {
                                 }
                             }
                         } catch (tokenUriError) {
-                            console.log('token_uri method not available or failed:', tokenUriError);
+                            console.log('token_uri method not available or token not minted yet:', tokenUriError);
+
+                            // If token_uri fails (no tokens minted yet), try to fetch metadata from base URI
+                            // In our case, the base URI might be a direct metadata URI
+                            if (baseUri) {
+                                try {
+                                    console.log('Trying to fetch metadata from base URI:', baseUri);
+
+                                    // Handle different URI formats for base URI too
+                                    let fetchUrl = baseUri
+                                    if (baseUri.startsWith('ipfs://')) {
+                                        fetchUrl = baseUri.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                                    } else if (baseUri.includes('gateway.pinata.cloud')) {
+                                        fetchUrl = baseUri
+                                    }
+
+                                    const metadataResponse = await fetch(fetchUrl);
+                                    if (metadataResponse.ok) {
+                                        const fetchedMetadata = await metadataResponse.json();
+                                        console.log('Fetched metadata from base URI:', fetchedMetadata);
+                                        metadata = fetchedMetadata;
+                                        tokenUri = baseUri; // Set tokenUri to baseUri since it's the metadata URI
+                                    }
+                                } catch (baseUriError) {
+                                    console.warn('Failed to fetch metadata from base URI:', baseUriError);
+                                }
+                            }
                         }
 
                         tokenData = {

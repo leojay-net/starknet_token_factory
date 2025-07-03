@@ -26,6 +26,7 @@ export default function CreatePage() {
     const [nftImage, setNftImage] = useState<File | null>(null)
     const [nftImageUrl, setNftImageUrl] = useState<string>("")
     const [uploadingImage, setUploadingImage] = useState(false)
+    const [uploadingMetadata, setUploadingMetadata] = useState(false)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -59,21 +60,13 @@ export default function CreatePage() {
                 result = await contract.invoke('create_erc20', calldata)
                 console.log('ERC20 token created:', result)
             } else {
-                // Create ERC721 token
-                let baseUri = formData.base_uri
-                if (nftImage && nftImageUrl) {
-                    baseUri = nftImageUrl
-                }
-                if (!baseUri) {
-                    throw new Error('Base URI is required for ERC721 tokens')
-                }
+                // Create ERC721 token contract (no minting yet)
                 const calldata = CallData.compile({
                     name: encodeByteArrayForCallData(formData.name),
-                    symbol: encodeByteArrayForCallData(formData.symbol),
-                    base_uri: encodeByteArrayForCallData(baseUri)
+                    symbol: encodeByteArrayForCallData(formData.symbol)
                 })
                 result = await contract.invoke('create_erc721', calldata)
-                console.log('ERC721 token created:', result)
+                console.log('ERC721 contract created:', result)
             }
 
             // Wait for transaction confirmation and get receipt
@@ -177,6 +170,29 @@ export default function CreatePage() {
         }
     }
 
+    const uploadMetadata = async (metadata: any) => {
+        try {
+            const data = new FormData()
+            const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' })
+            data.set("file", metadataBlob, "metadata.json")
+
+            const uploadRequest = await fetch("/api/files", {
+                method: "POST",
+                body: data,
+            })
+            const url = await uploadRequest.json()
+            return url
+        } catch (error) {
+            console.error('Error uploading metadata:', error)
+            addToast({
+                title: 'Upload Error',
+                description: 'Failed to upload metadata. Please try again.',
+                variant: 'destructive',
+            })
+            return ""
+        }
+    }
+
     if (!isConnected || !account) {
         return (
             <div className="container mx-auto px-4 py-20">
@@ -223,13 +239,13 @@ export default function CreatePage() {
                         />
                         <TokenTypeCard
                             icon={<Image className="h-12 w-12" />}
-                            title="ERC721 Token (NFT)"
-                            description="Create unique non-fungible tokens for art, collectibles, or digital assets"
+                            title="ERC721 Contract (NFT)"
+                            description="Create an NFT contract that can mint unique tokens with individual metadata"
                             features={[
-                                "Unique token IDs",
-                                "Metadata support",
-                                "Transfer & approval",
-                                "Creator tracking"
+                                "Deploy NFT contract",
+                                "Mint with custom metadata",
+                                "Individual token URIs",
+                                "Owner-controlled minting"
                             ]}
                             onClick={() => {
                                 setSelectedType('erc721')
@@ -241,7 +257,7 @@ export default function CreatePage() {
                     <div className="max-w-2xl mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
                         <div className="flex items-center justify-between mb-8">
                             <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {selectedType === 'erc20' ? 'ERC20 Token' : 'ERC721 Token'}
+                                {selectedType === 'erc20' ? 'Create ERC20 Token' : 'Create ERC721 Contract'}
                             </h2>
                             <button
                                 onClick={() => setSelectedType(null)}
@@ -321,65 +337,34 @@ export default function CreatePage() {
                             )}
 
                             {selectedType === 'erc721' && (
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                        Upload NFT Image
-                                    </label>
-                                    <input
-                                        type="file"
-                                        accept="image/*"
-                                        onChange={handleImageChange}
-                                        ref={fileInputRef}
-                                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    />
-                                    {uploadingImage && (
-                                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                            <div className="flex items-center space-x-2">
-                                                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                                                <span className="text-sm text-blue-700 dark:text-blue-300">Uploading image to IPFS...</span>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {nftImageUrl && !uploadingImage && (
-                                        <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                                            <div className="flex items-center space-x-2 mb-2">
-                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                                <span className="text-sm text-green-700 dark:text-green-300 font-medium">Image uploaded successfully!</span>
-                                            </div>
-                                            <img
-                                                src={nftImageUrl}
-                                                alt="NFT Preview"
-                                                className="max-w-full h-auto rounded-lg border border-slate-200 dark:border-slate-600"
-                                                style={{ maxHeight: 200 }}
-                                            />
-                                        </div>
-                                    )}
+                                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                        Creating ERC721 Contract
+                                    </h4>
+                                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                                        You're creating an ERC721 contract that can mint NFTs. After creation, you can mint individual NFTs with their own metadata and images.
+                                    </p>
+                                    <div className="text-xs text-blue-600 dark:text-blue-400">
+                                        • Each NFT will have its own metadata URI<br />
+                                        • Only the contract owner can mint new NFTs<br />
+                                        • Minting happens after contract deployment
+                                    </div>
                                 </div>
                             )}
 
                             <button
                                 type="submit"
-                                disabled={isCreating || (selectedType === 'erc721' && (uploadingImage || (nftImage && !nftImageUrl)))}
+                                disabled={isCreating}
                                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                             >
                                 {isCreating ? (
                                     <>
                                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                        Creating Token...
-                                    </>
-                                ) : selectedType === 'erc721' && uploadingImage ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                        Uploading Image...
-                                    </>
-                                ) : selectedType === 'erc721' && nftImage && !nftImageUrl ? (
-                                    <>
-                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                        Processing Image...
+                                        Creating {selectedType === 'erc20' ? 'Token' : 'Contract'}...
                                     </>
                                 ) : (
                                     <>
-                                        Create Token
+                                        Create {selectedType === 'erc20' ? 'Token' : 'Contract'}
                                         <ArrowRight className="w-5 h-5 ml-2" />
                                     </>
                                 )}
