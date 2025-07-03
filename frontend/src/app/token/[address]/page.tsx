@@ -47,6 +47,12 @@ export default function TokenPage() {
     const [uploadingMetadata, setUploadingMetadata] = useState(false)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
 
+    // Transfer state
+    const [showTransferModal, setShowTransferModal] = useState(false)
+    const [selectedNft, setSelectedNft] = useState<any>(null)
+    const [transferAddress, setTransferAddress] = useState('')
+    const [isTransferring, setIsTransferring] = useState(false)
+
     useEffect(() => {
         if (tokenAddress && tokenData && tokenData.type === 'ERC721') {
             fetchNftCollection()
@@ -463,6 +469,32 @@ export default function TokenPage() {
         }
     }
 
+    // Add handler to open transfer modal
+    const openTransferModal = (nft: any) => {
+        setSelectedNft(nft);
+        setShowTransferModal(true);
+        setTransferAddress('');
+    };
+
+    // Add transfer function
+    const handleTransferNFT = async () => {
+        if (!account || !selectedNft || !transferAddress) return;
+        setIsTransferring(true);
+        try {
+            const contract = getERC721Contract(tokenAddress, account);
+            const calldata = [address, transferAddress, { low: BigInt(selectedNft.tokenId), high: 0n }];
+            const result = await contract.invoke('transfer_from', calldata);
+            await provider.waitForTransaction(result.transaction_hash);
+            addToast({ title: 'Success', description: 'NFT transferred!' });
+            setShowTransferModal(false);
+            fetchNftCollection();
+        } catch (error) {
+            addToast({ title: 'Error', description: 'Transfer failed', variant: 'destructive' });
+        } finally {
+            setIsTransferring(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-8">
@@ -791,6 +823,16 @@ export default function TokenPage() {
                                                             </div>
                                                         </div>
                                                     )}
+
+                                                    {/* Transfer Button */}
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="mt-2"
+                                                        onClick={() => openTransferModal(nft)}
+                                                    >
+                                                        Transfer
+                                                    </Button>
                                                 </div>
                                             </div>
                                         ))}
@@ -1105,6 +1147,31 @@ export default function TokenPage() {
                                 </Button>
                             </div>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Transfer Modal */}
+            <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Transfer NFT{selectedNft ? ` #${selectedNft.tokenId}` : ''}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="Recipient Address"
+                            value={transferAddress}
+                            onChange={e => setTransferAddress(e.target.value)}
+                            className="w-full px-4 py-2 border rounded"
+                        />
+                        <Button
+                            onClick={handleTransferNFT}
+                            disabled={isTransferring || !transferAddress}
+                            className="w-full"
+                        >
+                            {isTransferring ? 'Transferring...' : 'Transfer'}
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
