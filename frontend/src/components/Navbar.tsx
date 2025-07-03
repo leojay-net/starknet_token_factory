@@ -5,10 +5,12 @@ import { useWallet } from '@/contexts/WalletContext'
 import { Button } from '@/components/ui/Button'
 import { Wallet, Menu } from 'lucide-react'
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 
 export function Navbar() {
     const { account, address, isConnected, connect, disconnect, isLoading } = useWallet()
     const [isMenuOpen, setIsMenuOpen] = useState(false)
+    const pathname = usePathname();
 
     const formatAddress = (addr: string) => {
         return `${addr.slice(0, 6)}...${addr.slice(-4)}`
@@ -28,6 +30,14 @@ export function Navbar() {
 
                     {/* Desktop Navigation */}
                     <div className="hidden md:flex items-center space-x-8">
+                        {pathname !== '/' && (
+                            <Link
+                                href="/"
+                                className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors font-semibold"
+                            >
+                                Home
+                            </Link>
+                        )}
                         <Link
                             href="/create"
                             className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
@@ -91,6 +101,15 @@ export function Navbar() {
                 {isMenuOpen && (
                     <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-700">
                         <div className="flex flex-col space-y-4">
+                            {pathname !== '/' && (
+                                <Link
+                                    href="/"
+                                    className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors font-semibold"
+                                    onClick={() => setIsMenuOpen(false)}
+                                >
+                                    Home
+                                </Link>
+                            )}
                             <Link
                                 href="/create"
                                 className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"

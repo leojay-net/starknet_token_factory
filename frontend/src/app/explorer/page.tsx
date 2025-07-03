@@ -136,21 +136,6 @@ export default function ExplorerPage() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                    Transactions
-                                </p>
-                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    {formatNumber(totalTransactions)}
-                                </p>
-                            </div>
-                            <BarChart3 className="h-6 w-6 text-orange-600" />
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
 
             {/* Search and Filters */}
