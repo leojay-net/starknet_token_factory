@@ -5,43 +5,54 @@ export default function HomePage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="relative py-20 lg:py-32">
-        <div className="container mx-auto px-4">
+      <section className="relative py-20 lg:py-32 overflow-hidden">
+        <div className="absolute inset-0 bg-hexagon-pattern opacity-20"></div>
+        <div className="container mx-auto px-4 relative z-10">
           <div className="text-center max-w-4xl mx-auto">
-            <h1 className="text-5xl lg:text-7xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-6">
-              Create Tokens on Starknet
-            </h1>
-            <p className="text-xl lg:text-2xl text-slate-600 dark:text-slate-300 mb-8 leading-relaxed">
-              Deploy ERC20 and ERC721 tokens with zero coding required.
-              Track, manage, and explore your tokens with our comprehensive dashboard.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="animate-fade-in">
+              <h1 className="text-5xl lg:text-7xl font-bold mb-6 text-responsive-2xl">
+                <span className="text-[var(--foreground)]">Create Tokens on </span>
+                <span className="text-[var(--stark-orange)]">Starknet</span>
+              </h1>
+            </div>
+            <div className="animate-slide-in-up" style={{ animationDelay: '0.2s' }}>
+              <p className="text-xl lg:text-2xl text-[var(--stark-gray)] mb-8 leading-relaxed">
+                Deploy ERC20 and ERC721 tokens with zero coding required.
+                Track, manage, and explore your tokens with our comprehensive dashboard.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center animate-scale-in" style={{ animationDelay: '0.4s' }}>
               <Link
                 href="/create"
-                className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-xl transition-all duration-300 group"
+                className="inline-flex items-center px-8 py-4 bg-[var(--stark-orange)] text-white font-semibold rounded-xl transform transition-all duration-300 hover:scale-105 hover-glow-orange group"
               >
                 Start Creating
                 <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link
                 href="/explorer"
-                className="inline-flex items-center px-8 py-4 border-2 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300"
+                className="inline-flex items-center px-8 py-4 border-2 border-[var(--stark-purple)] text-[var(--stark-purple)] font-semibold rounded-xl hover:bg-[var(--stark-purple)] hover:text-white transition-all duration-300 transform hover:scale-105"
               >
                 Explore Tokens
               </Link>
             </div>
           </div>
         </div>
+        {/* Floating Elements */}
+        <div className="absolute top-20 left-10 w-20 h-20 border border-[var(--stark-orange)]/30 rounded-xl animate-float" style={{ animationDelay: '0s' }}></div>
+        <div className="absolute top-40 right-20 w-16 h-16 border border-[var(--stark-purple)]/30 rounded-full animate-float" style={{ animationDelay: '1s' }}></div>
+        <div className="absolute bottom-20 left-1/4 w-12 h-12 border border-[var(--stark-orange)]/30 rounded-lg animate-float" style={{ animationDelay: '2s' }}></div>
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-white/50 dark:bg-slate-800/50">
-        <div className="container mx-auto px-4">
+      <section className="py-20 relative">
+        <div className="absolute inset-0 bg-[var(--muted)] opacity-50"></div>
+        <div className="container mx-auto px-4 relative z-10">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+            <h2 className="text-4xl font-bold text-[var(--foreground)] mb-4 text-responsive-xl">
               Why Choose Token Factory?
             </h2>
-            <p className="text-xl text-slate-600 dark:text-slate-300">
+            <p className="text-xl text-[var(--stark-gray)]">
               The most comprehensive token creation platform on Starknet
             </p>
           </div>
@@ -83,17 +94,18 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-gradient-to-r from-blue-600 to-purple-600">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-4xl font-bold text-white mb-4">
+      <section className="py-20 bg-[var(--stark-purple)] relative overflow-hidden">
+        <div className="absolute inset-0 bg-hexagon-pattern opacity-10"></div>
+        <div className="container mx-auto px-4 text-center relative z-10">
+          <h2 className="text-4xl font-bold text-white mb-4 text-responsive-xl">
             Ready to Create Your Token?
           </h2>
-          <p className="text-xl text-blue-100 mb-8">
+          <p className="text-xl text-[var(--stark-orange-light)] mb-8">
             Join the future of decentralized finance on Starknet
           </p>
           <Link
             href="/create"
-            className="inline-flex items-center px-8 py-4 bg-white text-blue-600 font-semibold rounded-xl hover:shadow-xl transition-all duration-300 group"
+            className="inline-flex items-center px-8 py-4 bg-white text-[var(--stark-purple)] font-semibold rounded-xl transform transition-all duration-300 hover:scale-105 hover:shadow-2xl group"
           >
             Get Started Now
             <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
@@ -110,14 +122,14 @@ function FeatureCard({ icon, title, description }: {
   description: string
 }) {
   return (
-    <div className="p-6 bg-white dark:bg-slate-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-slate-200 dark:border-slate-700">
-      <div className="text-blue-600 dark:text-blue-400 mb-4">
+    <div className="card-web3 p-6 text-center group animate-slide-in-up">
+      <div className="text-[var(--stark-orange)] mb-4 flex justify-center transform transition-transform group-hover:scale-110">
         {icon}
       </div>
-      <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+      <h3 className="text-xl font-semibold text-[var(--foreground)] mb-2">
         {title}
       </h3>
-      <p className="text-slate-600 dark:text-slate-300">
+      <p className="text-[var(--stark-gray)]">
         {description}
       </p>
     </div>
@@ -126,11 +138,11 @@ function FeatureCard({ icon, title, description }: {
 
 function StatCard({ number, label }: { number: string; label: string }) {
   return (
-    <div className="p-6">
-      <div className="text-4xl lg:text-5xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+    <div className="p-6 group">
+      <div className="text-4xl lg:text-5xl font-bold text-[var(--stark-orange)] mb-2 transform transition-transform group-hover:scale-105">
         {number}
       </div>
-      <div className="text-lg text-slate-600 dark:text-slate-300">
+      <div className="text-lg text-[var(--stark-gray)]">
         {label}
       </div>
     </div>

@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useWallet } from '@/contexts/WalletContext'
-import { Coins, Image, ArrowRight, Loader2 } from 'lucide-react'
+import { Coins, Image as ImageIcon, ArrowRight, Loader2 } from 'lucide-react'
 import { CreateTokenFormData } from '@/types'
 import { getTokenFactoryContract, bigIntToU256, encodeByteArrayForCallData, extractTokenAddressFromReceipt, provider } from '@/lib/starknet'
 import { useToast } from '@/components/ui/toaster'
@@ -23,11 +23,6 @@ export default function CreatePage() {
         initial_supply: '',
         base_uri: '',
     })
-    const [nftImage, setNftImage] = useState<File | null>(null)
-    const [nftImageUrl, setNftImageUrl] = useState<string>("")
-    const [uploadingImage, setUploadingImage] = useState(false)
-    const [uploadingMetadata, setUploadingMetadata] = useState(false)
-    const fileInputRef = useRef<HTMLInputElement | null>(null)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -131,76 +126,17 @@ export default function CreatePage() {
         }
     }
 
-    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null
-        setNftImage(file)
-
-        if (file) {
-            // Start uploading immediately when file is selected
-            await uploadNftImage(file)
-        } else {
-            setNftImageUrl("")
-            setUploadingImage(false)
-        }
-    }
-
-    const uploadNftImage = async (file: File) => {
-        if (!file) return ""
-        setUploadingImage(true)
-        try {
-            const data = new FormData()
-            data.set("file", file)
-            const uploadRequest = await fetch("/api/files", {
-                method: "POST",
-                body: data,
-            })
-            const url = await uploadRequest.json()
-            setNftImageUrl(url)
-            return url
-        } catch (error) {
-            console.error('Error uploading image:', error)
-            addToast({
-                title: 'Upload Error',
-                description: 'Failed to upload image. Please try again.',
-                variant: 'destructive',
-            })
-            return ""
-        } finally {
-            setUploadingImage(false)
-        }
-    }
-
-    const uploadMetadata = async (metadata: any) => {
-        try {
-            const data = new FormData()
-            const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' })
-            data.set("file", metadataBlob, "metadata.json")
-
-            const uploadRequest = await fetch("/api/files", {
-                method: "POST",
-                body: data,
-            })
-            const url = await uploadRequest.json()
-            return url
-        } catch (error) {
-            console.error('Error uploading metadata:', error)
-            addToast({
-                title: 'Upload Error',
-                description: 'Failed to upload metadata. Please try again.',
-                variant: 'destructive',
-            })
-            return ""
-        }
-    }
-
     if (!isConnected || !account) {
         return (
             <div className="container mx-auto px-4 py-20">
                 <div className="text-center max-w-md mx-auto">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="w-24 h-24 bg-[var(--stark-orange)]/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[var(--stark-orange)]/20">
+                        <Coins className="h-12 w-12 text-[var(--stark-orange)]" />
+                    </div>
+                    <h1 className="text-3xl font-bold text-[var(--foreground)] mb-4">
                         Connect Your Wallet
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                    <p className="text-[var(--stark-gray)] mb-8">
                         You need to connect your Starknet wallet to create tokens
                     </p>
                 </div>
@@ -211,11 +147,11 @@ export default function CreatePage() {
     return (
         <div className="container mx-auto px-4 py-12">
             <div className="max-w-4xl mx-auto">
-                <div className="text-center mb-12">
-                    <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">
+                <div className="text-center mb-12 animate-fade-in">
+                    <h1 className="text-4xl font-bold text-[var(--foreground)] mb-4 text-responsive-xl">
                         Create Your Token
                     </h1>
-                    <p className="text-xl text-slate-600 dark:text-slate-300">
+                    <p className="text-xl text-[var(--stark-gray)]">
                         Deploy ERC20 or ERC721 tokens with just a few clicks
                     </p>
                 </div>
@@ -238,7 +174,7 @@ export default function CreatePage() {
                             }}
                         />
                         <TokenTypeCard
-                            icon={<Image className="h-12 w-12" />}
+                            icon={<ImageIcon className="h-12 w-12" />}
                             title="ERC721 Contract (NFT)"
                             description="Create an NFT contract that can mint unique tokens with individual metadata"
                             features={[
@@ -254,14 +190,14 @@ export default function CreatePage() {
                         />
                     </div>
                 ) : (
-                    <div className="max-w-2xl mx-auto bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8">
+                    <div className="max-w-2xl mx-auto card-web3 p-8 animate-scale-in">
                         <div className="flex items-center justify-between mb-8">
-                            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                            <h2 className="text-2xl font-bold text-[var(--foreground)]">
                                 {selectedType === 'erc20' ? 'Create ERC20 Token' : 'Create ERC721 Contract'}
                             </h2>
                             <button
                                 onClick={() => setSelectedType(null)}
-                                className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+                                className="text-[var(--stark-gray)] hover:text-[var(--stark-orange)] transition-colors"
                             >
                                 Change Type
                             </button>
@@ -269,7 +205,7 @@ export default function CreatePage() {
 
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-[var(--stark-gray)] mb-2">
                                     Token Name
                                 </label>
                                 <input
@@ -277,13 +213,13 @@ export default function CreatePage() {
                                     value={formData.name}
                                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                                     placeholder="e.g., My Awesome Token"
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] placeholder-[var(--stark-gray)] focus:ring-2 focus:ring-[var(--stark-orange)] focus:border-[var(--stark-orange)]"
                                     required
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                <label className="block text-sm font-medium text-[var(--stark-gray)] mb-2">
                                     Token Symbol
                                 </label>
                                 <input
@@ -291,7 +227,7 @@ export default function CreatePage() {
                                     value={formData.symbol}
                                     onChange={(e) => setFormData(prev => ({ ...prev, symbol: e.target.value.toUpperCase() }))}
                                     placeholder="e.g., MAT"
-                                    className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    className="w-full px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] placeholder-[var(--stark-gray)] focus:ring-2 focus:ring-[var(--stark-orange)] focus:border-[var(--stark-orange)]"
                                     required
                                 />
                             </div>
@@ -299,7 +235,7 @@ export default function CreatePage() {
                             {selectedType === 'erc20' && (
                                 <>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-[var(--stark-gray)] mb-2">
                                             Decimals
                                         </label>
                                         <input
@@ -308,16 +244,16 @@ export default function CreatePage() {
                                             max="18"
                                             value={formData.decimals}
                                             onChange={(e) => setFormData(prev => ({ ...prev, decimals: parseInt(e.target.value) }))}
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            className="w-full px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] focus:ring-2 focus:ring-[var(--stark-orange)] focus:border-[var(--stark-orange)]"
                                             required
                                         />
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                        <p className="text-sm text-[var(--stark-gray)] mt-1">
                                             18 decimals is standard for most tokens
                                         </p>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                                        <label className="block text-sm font-medium text-[var(--stark-gray)] mb-2">
                                             Initial Supply
                                         </label>
                                         <input
@@ -326,10 +262,10 @@ export default function CreatePage() {
                                             value={formData.initial_supply}
                                             onChange={(e) => setFormData(prev => ({ ...prev, initial_supply: e.target.value }))}
                                             placeholder="e.g., 1000000"
-                                            className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            className="w-full px-4 py-3 rounded-lg border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] placeholder-[var(--stark-gray)] focus:ring-2 focus:ring-[var(--stark-orange)] focus:border-[var(--stark-orange)]"
                                             required
                                         />
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                        <p className="text-sm text-[var(--stark-gray)] mt-1">
                                             Total number of tokens to create initially
                                         </p>
                                     </div>
@@ -337,14 +273,14 @@ export default function CreatePage() {
                             )}
 
                             {selectedType === 'erc721' && (
-                                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                <div className="bg-[var(--stark-orange)]/5 rounded-lg p-4 border border-[var(--stark-orange)]/20">
+                                    <h4 className="font-medium text-[var(--foreground)] mb-2">
                                         Creating ERC721 Contract
                                     </h4>
-                                    <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                                        You're creating an ERC721 contract that can mint NFTs. After creation, you can mint individual NFTs with their own metadata and images.
+                                    <p className="text-sm text-[var(--stark-gray)] mb-3">
+                                        You&apos;re creating an ERC721 contract that can mint NFTs. After creation, you can mint individual NFTs with their own metadata and images.
                                     </p>
-                                    <div className="text-xs text-blue-600 dark:text-blue-400">
+                                    <div className="text-xs text-[var(--stark-gray)]">
                                         • Each NFT will have its own metadata URI<br />
                                         • Only the contract owner can mint new NFTs<br />
                                         • Minting happens after contract deployment
@@ -355,7 +291,7 @@ export default function CreatePage() {
                             <button
                                 type="submit"
                                 disabled={isCreating}
-                                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                                className="w-full bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white font-semibold py-4 px-6 rounded-lg hover-glow-orange transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transform hover:scale-105"
                             >
                                 {isCreating ? (
                                     <>
@@ -393,26 +329,26 @@ function TokenTypeCard({
     return (
         <div
             onClick={onClick}
-            className="p-8 bg-white dark:bg-slate-800 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-slate-200 dark:border-slate-700 cursor-pointer group"
+            className="card-web3 p-8 cursor-pointer group transform transition-all duration-300 hover:scale-105 animate-scale-in"
         >
-            <div className="text-blue-600 dark:text-blue-400 mb-6 group-hover:scale-110 transition-transform">
+            <div className="text-[var(--stark-orange)] mb-6 group-hover:scale-110 transition-transform">
                 {icon}
             </div>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+            <h3 className="text-2xl font-bold text-[var(--foreground)] mb-4">
                 {title}
             </h3>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
+            <p className="text-[var(--stark-gray)] mb-6">
                 {description}
             </p>
             <ul className="space-y-2">
                 {features.map((feature, index) => (
-                    <li key={index} className="flex items-center text-sm text-slate-600 dark:text-slate-300">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full mr-3"></div>
+                    <li key={index} className="flex items-center text-sm text-[var(--stark-gray)]">
+                        <div className="w-2 h-2 bg-[var(--stark-orange)] rounded-full mr-3"></div>
                         {feature}
                     </li>
                 ))}
             </ul>
-            <div className="mt-6 text-blue-600 dark:text-blue-400 font-semibold group-hover:translate-x-2 transition-transform inline-flex items-center">
+            <div className="mt-6 text-[var(--stark-orange)] font-semibold group-hover:translate-x-2 transition-transform inline-flex items-center">
                 Choose This Type
                 <ArrowRight className="w-4 h-4 ml-2" />
             </div>

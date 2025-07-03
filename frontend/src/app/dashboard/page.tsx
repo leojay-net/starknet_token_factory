@@ -2,12 +2,12 @@
 
 import React from 'react'
 import { useWallet } from '@/contexts/WalletContext'
-import { Coins, Image, TrendingUp, Users, ArrowUpRight, Copy, ExternalLink, RefreshCw } from 'lucide-react'
+import { Coins, Image, TrendingUp, ArrowUpRight, Copy, ExternalLink, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { useUserTokens } from '@/hooks/useUserTokens'
 
 export default function DashboardPage() {
-    const { account, address, isConnected } = useWallet()
+    const { account, address } = useWallet()
     const { userTokens, userStats, loading, error, refresh } = useUserTokens()
 
     const formatAddress = (addr: string | null | undefined | number | bigint) => {
@@ -25,10 +25,13 @@ export default function DashboardPage() {
         return (
             <div className="container mx-auto px-4 py-20">
                 <div className="text-center max-w-md mx-auto">
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <div className="w-24 h-24 bg-[var(--stark-orange)]/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[var(--stark-orange)]/20">
+                        <Coins className="h-12 w-12 text-[var(--stark-orange)]" />
+                    </div>
+                    <h1 className="text-3xl font-bold text-[var(--foreground)] mb-4">
                         Connect Your Wallet
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                    <p className="text-[var(--stark-gray)] mb-8">
                         Connect your Starknet wallet to view your dashboard
                     </p>
                 </div>
@@ -40,10 +43,13 @@ export default function DashboardPage() {
         return (
             <div className="container mx-auto px-4 py-20">
                 <div className="text-center max-w-md mx-auto">
-                    <h1 className="text-3xl font-bold text-red-600 mb-4">
+                    <div className="w-24 h-24 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                        <div className="text-4xl text-red-500">!</div>
+                    </div>
+                    <h1 className="text-3xl font-bold text-red-500 mb-4">
                         Error Loading Dashboard
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-300 mb-8">
+                    <p className="text-[var(--stark-gray)] mb-8">
                         {error}
                     </p>
                 </div>
@@ -55,25 +61,25 @@ export default function DashboardPage() {
         <div className="container mx-auto px-4 py-12">
             <div className="max-w-7xl mx-auto">
                 {/* Header */}
-                <div className="mb-12">
+                <div className="mb-12 animate-fade-in">
                     <div className="flex items-center justify-between mb-4">
-                        <h1 className="text-4xl font-bold text-slate-900 dark:text-white">
+                        <h1 className="text-4xl font-bold text-[var(--foreground)]">
                             Your Dashboard
                         </h1>
                         <button
                             onClick={refresh}
                             disabled={loading}
-                            className="inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300 disabled:opacity-50"
+                            className="inline-flex items-center px-4 py-2 border border-[var(--stark-orange)]/30 text-[var(--stark-orange)] font-medium rounded-lg hover:bg-[var(--stark-orange)] hover:text-white transition-all duration-300 disabled:opacity-50 transform hover:scale-105"
                         >
                             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                             Refresh
                         </button>
                     </div>
-                    <div className="flex items-center space-x-4 text-slate-600 dark:text-slate-300">
+                    <div className="flex items-center space-x-4 text-[var(--stark-gray)]">
                         <span>Wallet: {formatAddress(address || '')}</span>
                         <button
                             onClick={() => copyToClipboard(address || '')}
-                            className="hover:text-slate-900 dark:hover:text-white"
+                            className="hover:text-[var(--stark-orange)] transition-colors p-1 rounded-lg hover:bg-[var(--stark-orange)]/10"
                         >
                             <Copy className="w-4 h-4" />
                         </button>
@@ -109,17 +115,17 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row gap-4 mb-12">
+                <div className="flex flex-col sm:flex-row gap-4 mb-12 animate-slide-in-up">
                     <Link
                         href="/create"
-                        className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-300"
+                        className="inline-flex items-center px-6 py-3 bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white font-semibold rounded-lg transform transition-all duration-300 hover:scale-105 hover-glow-orange"
                     >
                         <Coins className="w-5 h-5 mr-2" />
                         Create New Token
                     </Link>
                     <Link
                         href="/explorer"
-                        className="inline-flex items-center px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300"
+                        className="inline-flex items-center px-6 py-3 border border-[var(--stark-purple)]/30 text-[var(--stark-purple)] font-semibold rounded-lg hover:bg-[var(--stark-purple)] hover:text-white transition-all duration-300 transform hover:scale-105"
                     >
                         <ExternalLink className="w-5 h-5 mr-2" />
                         Explore All Tokens
@@ -127,7 +133,7 @@ export default function DashboardPage() {
                     <button
                         onClick={refresh}
                         disabled={loading}
-                        className="inline-flex items-center px-6 py-3 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-300 disabled:opacity-50"
+                        className="inline-flex items-center px-6 py-3 border border-[var(--stark-gray)]/30 text-[var(--stark-gray)] font-semibold rounded-lg hover:bg-[var(--stark-gray)]/10 hover:text-[var(--foreground)] transition-all duration-300 disabled:opacity-50 transform hover:scale-105"
                     >
                         <RefreshCw className={`w-5 h-5 mr-2 ${loading ? 'animate-spin' : ''}`} />
                         Refresh Data
@@ -135,33 +141,38 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Tokens List */}
-                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
-                    <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                <div className="card-web3 overflow-hidden animate-scale-in">
+                    <div className="p-6 border-b border-[var(--border)]">
+                        <h2 className="text-2xl font-bold text-[var(--foreground)]">
                             Your Tokens
                         </h2>
-                        <p className="text-slate-600 dark:text-slate-300 mt-1">
+                        <p className="text-[var(--stark-gray)] mt-1">
                             Manage and monitor your created tokens
                         </p>
                     </div>
 
                     {loading ? (
                         <div className="p-12 text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                            <p className="text-slate-600 dark:text-slate-300">Loading your tokens...</p>
+                            <div className="relative w-8 h-8 mx-auto mb-4">
+                                <div className="absolute inset-0 border-4 border-[var(--stark-orange)]/20 rounded-full"></div>
+                                <div className="absolute inset-0 border-4 border-[var(--stark-orange)] border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                            <p className="text-[var(--stark-gray)]">Loading your tokens...</p>
                         </div>
                     ) : userTokens.length === 0 ? (
                         <div className="p-12 text-center">
-                            <Coins className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                            <div className="w-16 h-16 bg-[var(--stark-orange)]/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[var(--stark-orange)]/20">
+                                <Coins className="w-8 h-8 text-[var(--stark-orange)]" />
+                            </div>
+                            <h3 className="text-lg font-semibold text-[var(--foreground)] mb-2">
                                 No tokens created yet
                             </h3>
-                            <p className="text-slate-600 dark:text-slate-300 mb-6">
+                            <p className="text-[var(--stark-gray)] mb-6">
                                 Start by creating your first token
                             </p>
                             <Link
                                 href="/create"
-                                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-lg hover:shadow-lg transition-all duration-300"
+                                className="inline-flex items-center px-6 py-3 bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white font-semibold rounded-lg transform transition-all duration-300 hover:scale-105 hover-glow-orange"
                             >
                                 Create Token
                                 <ArrowUpRight className="w-4 h-4 ml-2" />
@@ -170,32 +181,35 @@ export default function DashboardPage() {
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full">
-                                <thead className="bg-slate-50 dark:bg-slate-700">
+                                <thead className="bg-[var(--muted)]">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-[var(--stark-gray)] uppercase tracking-wider">
                                             Token
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-[var(--stark-gray)] uppercase tracking-wider">
                                             Type
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-[var(--stark-gray)] uppercase tracking-wider">
                                             Address
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-[var(--stark-gray)] uppercase tracking-wider">
                                             Created
                                         </th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-[var(--stark-gray)] uppercase tracking-wider">
                                             Actions
                                         </th>
                                     </tr>
                                 </thead>
-                                <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                                <tbody className="bg-[var(--card)] divide-y divide-[var(--border)]">
                                     {userTokens.map((token) => (
-                                        <tr key={token.token_address} className="hover:bg-slate-50 dark:hover:bg-slate-700">
+                                        <tr key={token.token_address} className="hover:bg-[var(--muted)] transition-colors">
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="flex items-center">
                                                     <div className="flex-shrink-0 h-10 w-10">
-                                                        <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center ${token.token_type === 0
+                                                            ? 'bg-[var(--stark-orange)]'
+                                                            : 'bg-[var(--stark-purple)]'
+                                                            }`}>
                                                             {token.token_type === 0 ? (
                                                                 <Coins className="w-5 h-5 text-white" />
                                                             ) : (
@@ -204,10 +218,10 @@ export default function DashboardPage() {
                                                         </div>
                                                     </div>
                                                     <div className="ml-4">
-                                                        <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                                        <div className="text-sm font-medium text-[var(--foreground)]">
                                                             {token.name}
                                                         </div>
-                                                        <div className="text-sm text-slate-500 dark:text-slate-400">
+                                                        <div className="text-sm text-[var(--stark-gray)]">
                                                             {token.symbol}
                                                         </div>
                                                     </div>
@@ -215,30 +229,30 @@ export default function DashboardPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${token.token_type === 0
-                                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                    : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                                    ? 'bg-[var(--stark-orange)]/10 text-[var(--stark-orange)] border border-[var(--stark-orange)]/20'
+                                                    : 'bg-[var(--stark-purple)]/10 text-[var(--stark-purple)] border border-[var(--stark-purple)]/20'
                                                     }`}>
                                                     {token.token_type === 0 ? 'ERC20' : 'ERC721'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--foreground)]">
                                                 <div className="flex items-center space-x-2">
                                                     <span>{formatAddress(token.token_address)}</span>
                                                     <button
                                                         onClick={() => copyToClipboard(token.token_address)}
-                                                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                                        className="text-[var(--stark-gray)] hover:text-[var(--stark-orange)] transition-colors p-1 rounded-lg hover:bg-[var(--stark-orange)]/10"
                                                     >
                                                         <Copy className="w-3 h-3" />
                                                     </button>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-[var(--stark-gray)]">
                                                 {new Date(Number(token.created_at) * 1000).toLocaleDateString()}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                                                 <Link
                                                     href={`/token/${token.token_address}`}
-                                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                                    className="text-[var(--stark-orange)] hover:text-[var(--stark-orange-dark)] transition-colors font-medium"
                                                 >
                                                     View Details
                                                 </Link>
@@ -267,23 +281,21 @@ function StatsCard({
     subtitle: string
 }) {
     return (
-        <div className="bg-white dark:bg-slate-800 rounded-lg p-6 shadow-lg border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center">
-                <div className="text-blue-600 dark:text-blue-400">
+        <div className="card-web3 p-6 text-center group hover-glow-orange transform transition-all duration-300 hover:scale-105">
+            <div className="flex items-center justify-center w-12 h-12 bg-[var(--stark-orange)]/10 rounded-xl mx-auto mb-4 border border-[var(--stark-orange)]/20 group-hover:bg-[var(--stark-orange)] group-hover:border-[var(--stark-orange)] transition-all duration-300">
+                <div className="text-[var(--stark-orange)] group-hover:text-white transition-colors duration-300">
                     {icon}
                 </div>
-                <div className="ml-4">
-                    <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">
-                        {title}
-                    </h3>
-                    <p className="text-2xl font-semibold text-slate-900 dark:text-white">
-                        {value.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                        {subtitle}
-                    </p>
-                </div>
             </div>
+            <h3 className="text-sm font-medium text-[var(--stark-gray)] uppercase tracking-wider mb-2">
+                {title}
+            </h3>
+            <p className="text-2xl font-bold text-[var(--foreground)] mb-1">
+                {value.toLocaleString()}
+            </p>
+            <p className="text-xs text-[var(--stark-gray)]">
+                {subtitle}
+            </p>
         </div>
     )
 }

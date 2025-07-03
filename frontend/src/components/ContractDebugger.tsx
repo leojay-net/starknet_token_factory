@@ -8,14 +8,19 @@ import { getTokenFactoryContract } from '@/lib/starknet'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 
+type DebugResult = {
+    type: string
+    value: unknown
+}
+
 export function ContractDebugger() {
     const [loading, setLoading] = useState(false)
-    const [result, setResult] = useState<any>(null)
+    const [result, setResult] = useState<DebugResult | null>(null)
     const [error, setError] = useState<string | null>(null)
 
     const { address } = useWallet()
     const { userTokens, userStats, refresh: refreshUserTokens } = useUserTokens()
-    const { allTokens, stats: globalStats, refresh: refreshGlobalTokens } = useGlobalTokens()
+    const { allTokens, globalStats, refresh: refreshGlobalTokens } = useGlobalTokens()
 
     const testTotalTokens = async () => {
         setLoading(true)
@@ -35,9 +40,6 @@ export function ContractDebugger() {
             setLoading(false)
         }
     }
-            setLoading(false)
-        }
-    }
 
     const testUserTokens = async () => {
         if (!address) {
@@ -50,10 +52,10 @@ export function ContractDebugger() {
         setResult(null)
 
         try {
-            console.log('Testing getUserTokens for address:', address)
-            const tokens = await getUserTokens(address)
-            console.log('User tokens result:', tokens)
-            setResult({ type: 'user_tokens', value: tokens })
+            console.log('Testing user tokens refresh for address:', address)
+            await refreshUserTokens()
+            console.log('User tokens result:', userTokens)
+            setResult({ type: 'user_tokens', value: userTokens })
         } catch (err) {
             console.error('Error:', err)
             setError(err instanceof Error ? err.message : 'Unknown error')
@@ -73,8 +75,8 @@ export function ContractDebugger() {
         setResult(null)
 
         try {
-            console.log('Testing getUserTokenCount for address:', address)
-            const count = await getUserTokenCount(address)
+            console.log('Testing user token count for address:', address)
+            const count = userTokens.length
             console.log('User token count result:', count)
             setResult({ type: 'user_token_count', value: count })
         } catch (err) {

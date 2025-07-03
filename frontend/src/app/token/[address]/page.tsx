@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +8,6 @@ import {
     ArrowLeft,
     Copy,
     ExternalLink,
-    Activity,
     Coins,
     Palette,
     Image as ImageIcon,
@@ -16,7 +15,7 @@ import {
     Loader2
 } from 'lucide-react'
 import Link from 'next/link'
-import { ERC20TokenData, ERC721TokenData, TokenTransaction } from '@/types'
+import { ERC20TokenData } from '@/types'
 import { useTokenData } from '@/hooks/useTokenData'
 import { useWallet } from '@/contexts/WalletContext'
 import { useToast } from '@/components/ui/toaster'
@@ -30,7 +29,17 @@ export default function TokenPage() {
     const { tokenData, loading, error } = useTokenData(tokenAddress)
     const { account, address, isConnected } = useWallet()
     const { addToast } = useToast()
-    const [nftCollection, setNftCollection] = useState<any[]>([])
+    const [nftCollection, setNftCollection] = useState<Array<{
+        tokenId: number;
+        owner: string;
+        tokenUri: string;
+        metadata: {
+            name?: string;
+            description?: string;
+            image?: string;
+            attributes?: Array<{ trait_type: string; value: string }>;
+        } | null;
+    }>>([])
     const [loadingNfts, setLoadingNfts] = useState(false)
 
     // Minting state
@@ -41,7 +50,6 @@ export default function TokenPage() {
         description: '',
         recipient: address || ''
     })
-    const [nftImage, setNftImage] = useState<File | null>(null)
     const [nftImageUrl, setNftImageUrl] = useState<string>("")
     const [uploadingImage, setUploadingImage] = useState(false)
     const [uploadingMetadata, setUploadingMetadata] = useState(false)
@@ -49,7 +57,17 @@ export default function TokenPage() {
 
     // Transfer state
     const [showTransferModal, setShowTransferModal] = useState(false)
-    const [selectedNft, setSelectedNft] = useState<any>(null)
+    const [selectedNft, setSelectedNft] = useState<{
+        tokenId: number;
+        owner: string;
+        tokenUri: string;
+        metadata: {
+            name?: string;
+            description?: string;
+            image?: string;
+            attributes?: Array<{ trait_type: string; value: string }>;
+        } | null;
+    } | null>(null)
     const [transferAddress, setTransferAddress] = useState('')
     const [isTransferring, setIsTransferring] = useState(false)
 
@@ -65,13 +83,7 @@ export default function TokenPage() {
     const [erc20TransferAmount, setErc20TransferAmount] = useState('')
     const [isErc20Transferring, setIsErc20Transferring] = useState(false)
 
-    useEffect(() => {
-        if (tokenAddress && tokenData && tokenData.type === 'ERC721') {
-            fetchNftCollection()
-        }
-    }, [tokenAddress, tokenData])
-
-    const fetchNftCollection = async () => {
+    const fetchNftCollection = useCallback(async () => {
         if (!tokenData || tokenData.type !== 'ERC721') return;
 
         setLoadingNfts(true);
@@ -123,12 +135,12 @@ export default function TokenPage() {
 
                         nfts.push({
                             tokenId: i,
-                            owner: ownerResult,
+                            owner: String(ownerResult),
                             tokenUri,
                             metadata
                         });
                     }
-                } catch (error) {
+                } catch {
                     // NFT doesn't exist (burned or never minted), just skip
                     continue;
                 }
@@ -140,10 +152,16 @@ export default function TokenPage() {
         } finally {
             setLoadingNfts(false);
         }
-    }
+    }, [tokenData, tokenAddress])
+
+    useEffect(() => {
+        if (tokenAddress && tokenData && tokenData.type === 'ERC721') {
+            fetchNftCollection()
+        }
+    }, [tokenAddress, tokenData, fetchNftCollection])
 
     // Helper function to parse ByteArray
-    const parseByteArray = (result: any): string => {
+    const parseByteArray = (result: unknown): string => {
         try {
             console.log('Parsing ByteArray result:', result);
 
@@ -153,13 +171,13 @@ export default function TokenPage() {
 
             // Handle raw ByteArray format: [data_len, data1, data2, ..., pending_word, pending_word_len]
             if (Array.isArray(result) && result.length >= 2) {
-                const dataLen = parseInt(result[0]);
+                const dataLen = parseInt(result[0] as string);
                 let fullString = '';
 
                 // Extract data elements (skip first element which is length)
                 for (let i = 1; i <= dataLen; i++) {
                     if (result[i] && result[i] !== '0x0') {
-                        const hexString = result[i].replace('0x', '');
+                        const hexString = (result[i] as string).replace('0x', '');
                         const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
                         fullString += decodedPart;
                     }
@@ -169,10 +187,10 @@ export default function TokenPage() {
                 const pendingWordIndex = dataLen + 1;
                 const pendingWordLenIndex = result.length - 1;
 
-                if (result[pendingWordLenIndex] && parseInt(result[pendingWordLenIndex]) > 0) {
-                    const pendingWordLen = parseInt(result[pendingWordLenIndex]);
+                if (result[pendingWordLenIndex] && parseInt(result[pendingWordLenIndex] as string) > 0) {
+                    const pendingWordLen = parseInt(result[pendingWordLenIndex] as string);
                     if (result[pendingWordIndex] && result[pendingWordIndex] !== '0x0') {
-                        const pendingHex = result[pendingWordIndex].replace('0x', '');
+                        const pendingHex = (result[pendingWordIndex] as string).replace('0x', '');
                         // Only take the specified number of bytes from the pending word
                         const pendingBytes = pendingHex.slice(0, pendingWordLen * 2); // 2 hex chars per byte
                         if (pendingBytes) {
@@ -187,28 +205,37 @@ export default function TokenPage() {
             }
 
             // Handle structured ByteArray format: { data: [...], pending_word: ..., pending_word_len: ... }
-            if (result?.data && Array.isArray(result.data)) {
-                let fullString = '';
+            if (result && typeof result === 'object' && 'data' in result) {
+                const structuredResult = result as {
+                    data?: unknown[];
+                    pending_word?: string;
+                    pending_word_len?: string;
+                };
 
-                for (const element of result.data) {
-                    if (element && element !== '0x0') {
-                        const hexString = element.replace('0x', '');
-                        const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
-                        fullString += decodedPart;
+                if (structuredResult.data && Array.isArray(structuredResult.data)) {
+                    let fullString = '';
+
+                    for (const element of structuredResult.data) {
+                        if (element && element !== '0x0') {
+                            const hexString = (element as string).replace('0x', '');
+                            const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
+                            fullString += decodedPart;
+                        }
                     }
-                }
 
-                if (result.pending_word && result.pending_word !== '0x0' && result.pending_word_len && parseInt(result.pending_word_len) > 0) {
-                    const pendingHex = result.pending_word.replace('0x', '');
-                    const pendingLength = parseInt(result.pending_word_len);
-                    const pendingBytes = pendingHex.slice(0, pendingLength * 2);
-                    if (pendingBytes) {
-                        const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
-                        fullString += pendingString;
+                    if (structuredResult.pending_word && structuredResult.pending_word !== '0x0' &&
+                        structuredResult.pending_word_len && parseInt(structuredResult.pending_word_len) > 0) {
+                        const pendingHex = structuredResult.pending_word.replace('0x', '');
+                        const pendingLength = parseInt(structuredResult.pending_word_len);
+                        const pendingBytes = pendingHex.slice(0, pendingLength * 2);
+                        if (pendingBytes) {
+                            const pendingString = Buffer.from(pendingBytes, 'hex').toString('utf8');
+                            fullString += pendingString;
+                        }
                     }
-                }
 
-                return fullString.trim();
+                    return fullString.trim();
+                }
             }
 
             return ''
@@ -231,9 +258,6 @@ export default function TokenPage() {
         return value.toFixed(2)
     }
 
-    const formatDate = (timestamp: number) =>
-        new Date(timestamp * 1000).toLocaleString()
-
     const copyToClipboard = (text: string) => {
         navigator.clipboard.writeText(text)
         addToast({
@@ -245,7 +269,6 @@ export default function TokenPage() {
     // Minting functions
     const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0] || null
-        setNftImage(file)
 
         if (file) {
             await uploadNftImage(file)
@@ -297,7 +320,12 @@ export default function TokenPage() {
         }
     }
 
-    const uploadMetadata = async (metadata: any) => {
+    const uploadMetadata = async (metadata: {
+        name: string;
+        description: string;
+        image: string;
+        attributes: Array<{ trait_type: string; value: string }>;
+    }) => {
         try {
             const data = new FormData()
             const metadataBlob = new Blob([JSON.stringify(metadata)], { type: 'application/json' })
@@ -461,7 +489,6 @@ export default function TokenPage() {
                 description: `NFT "${mintFormData.name}" has been minted successfully!`,
             })
             setMintFormData({ name: '', description: '', recipient: address || '' })
-            setNftImage(null)
             setNftImageUrl("")
             setShowMintModal(false)
 
@@ -482,7 +509,17 @@ export default function TokenPage() {
     }
 
     // Add handler to open transfer modal
-    const openTransferModal = (nft: any) => {
+    const openTransferModal = (nft: {
+        tokenId: number;
+        owner: string;
+        tokenUri: string;
+        metadata: {
+            name?: string;
+            description?: string;
+            image?: string;
+            attributes?: Array<{ trait_type: string; value: string }>;
+        } | null;
+    }) => {
         setSelectedNft(nft);
         setShowTransferModal(true);
         setTransferAddress('');
@@ -494,7 +531,7 @@ export default function TokenPage() {
         setIsTransferring(true);
         try {
             const contract = getERC721Contract(tokenAddress, account);
-            const calldata = [address, transferAddress, { low: BigInt(selectedNft.tokenId), high: 0n }];
+            const calldata = CallData.compile([address || '', transferAddress, { low: BigInt(selectedNft.tokenId), high: 0n }]);
             const result = await contract.invoke('transfer_from', calldata);
             await provider.waitForTransaction(result.transaction_hash);
             addToast({ title: 'Success', description: 'NFT transferred!' });
@@ -513,7 +550,7 @@ export default function TokenPage() {
             addToast({ title: 'Error', description: 'Please connect your wallet first.', variant: 'destructive' })
             return
         }
-        if (!erc20MintRecipient || !erc20MintAmount) {
+        if (!erc20MintRecipient || !erc20MintAmount || !tokenData) {
             addToast({ title: 'Error', description: 'Recipient and amount required.', variant: 'destructive' })
             return
         }
@@ -542,7 +579,7 @@ export default function TokenPage() {
             addToast({ title: 'Error', description: 'Please connect your wallet first.', variant: 'destructive' })
             return
         }
-        if (!erc20TransferRecipient || !erc20TransferAmount) {
+        if (!erc20TransferRecipient || !erc20TransferAmount || !tokenData) {
             addToast({ title: 'Error', description: 'Recipient and amount required.', variant: 'destructive' })
             return
         }
@@ -571,21 +608,21 @@ export default function TokenPage() {
                 <div className="flex items-center justify-center min-h-screen -mt-20">
                     <div className="text-center">
                         <div className="relative w-24 h-24 mx-auto mb-8">
-                            <div className="absolute inset-0 border-4 border-blue-200 dark:border-blue-800 rounded-full"></div>
-                            <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                            <div className="absolute inset-2 border-4 border-purple-200 dark:border-purple-800 rounded-full"></div>
-                            <div className="absolute inset-2 border-4 border-purple-600 border-t-transparent rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                            <div className="absolute inset-0 border-4 border-[var(--stark-orange)]/20 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-[var(--stark-orange)] border-t-transparent rounded-full animate-spin"></div>
+                            <div className="absolute inset-2 border-4 border-[var(--stark-purple)]/20 rounded-full"></div>
+                            <div className="absolute inset-2 border-4 border-[var(--stark-purple)] border-t-transparent rounded-full animate-spin animate-rotate-slow"></div>
                         </div>
-                        <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
+                        <h2 className="text-2xl font-bold text-[var(--foreground)] mb-4">
                             Loading Token Data
                         </h2>
-                        <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+                        <p className="text-[var(--stark-gray)] max-w-md mx-auto">
                             Fetching token information from the blockchain. This may take a few moments...
                         </p>
                         <div className="mt-8 flex items-center justify-center space-x-2">
-                            <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
-                            <div className="w-2 h-2 bg-purple-600 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                            <div className="w-2 h-2 bg-[var(--stark-orange)] rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-[var(--stark-purple)] rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                            <div className="w-2 h-2 bg-[var(--stark-blue)] rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                         </div>
                     </div>
                 </div>
@@ -597,23 +634,23 @@ export default function TokenPage() {
         return (
             <div className="container mx-auto px-4 py-8">
                 <div className="text-center py-20">
-                    <div className="w-24 h-24 bg-gradient-to-br from-red-100 to-orange-100 dark:from-red-900/20 dark:to-orange-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                        <div className="text-4xl">⚠️</div>
+                    <div className="w-24 h-24 bg-red-100 dark:bg-red-900/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-red-200 dark:border-red-800">
+                        <div className="text-4xl text-red-500">!</div>
                     </div>
                     <h1 className="text-3xl font-bold text-red-600 dark:text-red-400 mb-4">
                         Error Loading Token
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
+                    <p className="text-[var(--stark-gray)] mb-8 max-w-md mx-auto">
                         {error}
                     </p>
                     <div className="space-x-4">
                         <Link href="/dashboard">
-                            <Button variant="outline" className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <Button variant="outline" className="border-[var(--stark-orange)]/30 text-[var(--stark-orange)] hover:bg-[var(--stark-orange)] hover:text-white">
                                 Go to Dashboard
                             </Button>
                         </Link>
                         <Link href="/explorer">
-                            <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                            <Button className="bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white">
                                 Browse All Tokens
                             </Button>
                         </Link>
@@ -627,17 +664,17 @@ export default function TokenPage() {
         return (
             <div className="container mx-auto px-4 py-8">
                 <div className="text-center py-20">
-                    <div className="w-24 h-24 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center mx-auto mb-6 border-2 border-dashed border-slate-300 dark:border-slate-600">
-                        <div className="text-4xl">🔍</div>
+                    <div className="w-24 h-24 bg-[var(--muted)] rounded-2xl flex items-center justify-center mx-auto mb-6 border-2 border-dashed border-[var(--stark-gray)]/30">
+                        <div className="text-4xl text-[var(--stark-gray)]">?</div>
                     </div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
+                    <h1 className="text-3xl font-bold text-[var(--foreground)] mb-4">
                         Token Not Found
                     </h1>
-                    <p className="text-slate-600 dark:text-slate-400 mb-8 max-w-md mx-auto">
+                    <p className="text-[var(--stark-gray)] mb-8 max-w-md mx-auto">
                         The token address you&apos;re looking for doesn&apos;t exist or hasn&apos;t been created through our factory.
                     </p>
                     <Link href="/explorer">
-                        <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                        <Button className="bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white">
                             Back to Explorer
                         </Button>
                     </Link>
@@ -647,15 +684,14 @@ export default function TokenPage() {
     }
 
     const isERC20 = tokenData.type === 'ERC20'
-    const erc721Data = tokenData as ERC721TokenData
 
     return (
         <div className="container mx-auto px-4 py-8">
             {/* Enhanced Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-8 animate-fade-in">
                 <div className="flex items-center space-x-4">
                     <Link href="/explorer">
-                        <Button variant="outline" size="sm" className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <Button variant="outline" size="sm" className="border-[var(--stark-orange)]/30 text-[var(--stark-orange)] hover:bg-[var(--stark-orange)] hover:text-white transition-all duration-300">
                             <ArrowLeft className="h-4 w-4 mr-2" />
                             Back to Explorer
                         </Button>
@@ -665,47 +701,47 @@ export default function TokenPage() {
                 <div className="flex items-center space-x-4">
                     {/* Network Badge */}
                     <div className="hidden sm:flex items-center space-x-2 px-3 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-full text-sm font-medium">
-                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <div className="status-online w-2 h-2 rounded-full"></div>
                         <span>Starknet Sepolia</span>
                     </div>
                 </div>
             </div>
 
             {/* Enhanced Token Info */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8 animate-scale-in">
                 <div className="lg:col-span-2">
-                    <Card className="relative overflow-hidden border-0 shadow-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900">
+                    <Card className="card-web3 relative overflow-hidden">
                         {/* Background Pattern */}
-                        <div className="absolute inset-0 bg-grid-slate-100 dark:bg-grid-slate-700/25 [mask-image:linear-gradient(0deg,transparent,black)] opacity-10"></div>
+                        <div className="absolute inset-0 bg-hexagon-pattern opacity-5"></div>
 
                         <CardHeader className="relative">
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center space-x-6">
                                     <div className="relative">
-                                        <div className={`w-20 h-20 bg-gradient-to-r ${isERC20
-                                            ? 'from-yellow-400 via-orange-500 to-red-500'
-                                            : 'from-blue-600 via-purple-600 to-indigo-600'
-                                            } rounded-2xl flex items-center justify-center shadow-lg`}>
+                                        <div className={`w-20 h-20 ${isERC20
+                                            ? 'bg-[var(--stark-orange)]'
+                                            : 'bg-[var(--stark-purple)]'
+                                            } rounded-2xl flex items-center justify-center shadow-lg transform transition-transform hover:scale-105`}>
                                             {isERC20 ? (
                                                 <Coins className="h-10 w-10 text-white" />
                                             ) : (
                                                 <Palette className="h-10 w-10 text-white" />
                                             )}
                                         </div>
-                                        {/* Floating particles effect */}
-                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-400 rounded-full animate-ping"></div>
-                                        <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-purple-400 rounded-full animate-pulse"></div>
+                                        {/* Modern particles effect */}
+                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-[var(--stark-orange)] rounded-full animate-pulse"></div>
+                                        <div className="absolute -bottom-1 -left-1 w-3 h-3 bg-[var(--stark-purple)] rounded-full animate-float"></div>
                                     </div>
                                     <div>
-                                        <CardTitle className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300 bg-clip-text text-transparent">
+                                        <CardTitle className="text-3xl font-bold text-[var(--foreground)]">
                                             {tokenData.name}
                                         </CardTitle>
                                         <div className="text-xl mt-2 flex items-center space-x-3">
-                                            <span className="font-semibold text-slate-700 dark:text-slate-300">{tokenData.symbol}</span>
-                                            <span className="text-slate-400">•</span>
+                                            <span className="font-semibold text-[var(--stark-gray)]">{tokenData.symbol}</span>
+                                            <span className="text-[var(--stark-gray)]">•</span>
                                             <div className={`px-3 py-1 rounded-full text-sm font-medium ${isERC20
-                                                ? 'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300'
-                                                : 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+                                                ? 'bg-[var(--stark-orange)]/10 text-[var(--stark-orange)] border border-[var(--stark-orange)]/20'
+                                                : 'bg-[var(--stark-purple)]/10 text-[var(--stark-purple)] border border-[var(--stark-purple)]/20'
                                                 }`}>
                                                 {isERC20 ? 'ERC20 Token' : 'ERC721 Collection'}
                                             </div>
@@ -715,8 +751,18 @@ export default function TokenPage() {
                                 {/* ERC20 Mint/Transfer Buttons */}
                                 {isERC20 && isConnected && (
                                     <div className="flex flex-col space-y-2">
-                                        <Button onClick={() => setShowErc20MintModal(true)} className="bg-gradient-to-r from-green-500 to-yellow-500 text-white">Mint</Button>
-                                        <Button onClick={() => setShowErc20TransferModal(true)} className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">Transfer</Button>
+                                        <Button
+                                            onClick={() => setShowErc20MintModal(true)}
+                                            className="bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white transform transition-all duration-300 hover:scale-105"
+                                        >
+                                            Mint
+                                        </Button>
+                                        <Button
+                                            onClick={() => setShowErc20TransferModal(true)}
+                                            className="bg-[var(--stark-purple)] hover:bg-[var(--stark-purple-dark)] text-white transform transition-all duration-300 hover:scale-105"
+                                        >
+                                            Transfer
+                                        </Button>
                                     </div>
                                 )}
                             </div>
@@ -724,15 +770,15 @@ export default function TokenPage() {
                         <CardContent className="relative">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 {/* Contract Address */}
-                                <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
+                                <div className="p-4 glass rounded-xl border border-[var(--stark-orange)]/10 hover:border-[var(--stark-orange)]/20 transition-all duration-300">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
+                                        <span className="text-sm font-semibold text-[var(--stark-gray)] uppercase tracking-wider">
                                             Contract Address
                                         </span>
                                         <div className="flex items-center space-x-2">
                                             <button
                                                 onClick={() => copyToClipboard(tokenData.address)}
-                                                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                                                className="p-1.5 text-[var(--stark-gray)] hover:text-[var(--stark-orange)] hover:bg-[var(--stark-orange)]/10 rounded-lg transition-all duration-300"
                                             >
                                                 <Copy className="h-4 w-4" />
                                             </button>
@@ -740,27 +786,27 @@ export default function TokenPage() {
                                                 href={`https://sepolia.starkscan.co/contract/${tokenData.address}`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
+                                                className="p-1.5 text-[var(--stark-gray)] hover:text-[var(--stark-orange)] hover:bg-[var(--stark-orange)]/10 rounded-lg transition-all duration-300"
                                             >
                                                 <ExternalLink className="h-4 w-4" />
                                             </a>
                                         </div>
                                     </div>
-                                    <code className="text-sm font-mono text-slate-900 dark:text-white block mt-2">
+                                    <code className="text-sm font-mono text-[var(--foreground)] block mt-2">
                                         {formatAddress(tokenData.address)}
                                     </code>
                                 </div>
 
                                 {/* Token Type */}
-                                <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
-                                    <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                                <div className="p-4 glass rounded-xl border border-[var(--stark-purple)]/10 hover:border-[var(--stark-purple)]/20 transition-all duration-300">
+                                    <span className="text-sm font-semibold text-[var(--stark-gray)] uppercase tracking-wider block">
                                         Token Standard
                                     </span>
                                     <div className="flex items-center space-x-2 mt-2">
-                                        <span className="text-sm font-bold text-slate-900 dark:text-white">
+                                        <span className="text-sm font-bold text-[var(--foreground)]">
                                             {isERC20 ? 'ERC20' : 'ERC721'}
                                         </span>
-                                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                                        <span className="text-xs text-[var(--stark-gray)]">
                                             ({isERC20 ? 'Fungible' : 'Non-Fungible'})
                                         </span>
                                     </div>
@@ -768,11 +814,11 @@ export default function TokenPage() {
 
                                 {/* Decimals for ERC20 only */}
                                 {isERC20 && tokenData.type === 'ERC20' && (
-                                    <div className="p-4 bg-white/80 dark:bg-slate-700/50 backdrop-blur-sm rounded-xl border border-slate-200 dark:border-slate-600">
-                                        <span className="text-sm font-semibold text-slate-600 dark:text-slate-400 uppercase tracking-wider block">
+                                    <div className="p-4 glass rounded-xl border border-[var(--stark-blue)]/10 hover:border-[var(--stark-blue)]/20 transition-all duration-300">
+                                        <span className="text-sm font-semibold text-[var(--stark-gray)] uppercase tracking-wider block">
                                             Decimals
                                         </span>
-                                        <span className="text-sm font-bold text-slate-900 dark:text-white block mt-2">
+                                        <span className="text-sm font-bold text-[var(--foreground)] block mt-2">
                                             {(tokenData as ERC20TokenData).decimals}
                                         </span>
                                     </div>
@@ -810,7 +856,7 @@ export default function TokenPage() {
                                             No NFTs Minted Yet
                                         </h3>
                                         <p className="text-slate-600 dark:text-slate-400 mb-6">
-                                            This collection doesn't have any NFTs yet. Be the first to mint one!
+                                            This collection doesn&apos;t have any NFTs yet. Be the first to mint one!
                                         </p>
                                         {isConnected && (
                                             <Button
@@ -952,19 +998,19 @@ export default function TokenPage() {
                 </div>
 
                 {/* Enhanced Stats */}
-                <div className="space-y-6">
+                <div className="space-y-6 animate-slide-in-up" style={{ animationDelay: '0.2s' }}>
                     {/* Total Supply Card */}
-                    <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/30">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-purple-600/10"></div>
+                    <Card className="card-web3 hover-glow-orange relative overflow-hidden">
+                        <div className="absolute inset-0 bg-circuit-pattern opacity-10"></div>
                         <CardContent className="p-6 relative">
                             <div className="text-center">
-                                <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl mx-auto mb-4">
+                                <div className="flex items-center justify-center w-12 h-12 bg-[var(--stark-orange)] rounded-xl mx-auto mb-4 transform transition-transform hover:scale-110">
                                     <Coins className="h-6 w-6 text-white" />
                                 </div>
-                                <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
+                                <h3 className="text-sm font-bold text-[var(--stark-gray)] mb-2 uppercase tracking-wider">
                                     Total Supply
                                 </h3>
-                                <p className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                <p className="text-3xl font-bold text-[var(--stark-orange)]">
                                     {(() => {
                                         if (tokenData.type === 'ERC20') {
                                             const erc20Data = tokenData as ERC20TokenData;
@@ -973,7 +1019,7 @@ export default function TokenPage() {
                                         return nftCollection.length;
                                     })()}
                                 </p>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                <p className="text-xs text-[var(--stark-gray)] mt-1">
                                     {isERC20 ? 'Tokens' : 'NFTs Minted'}
                                 </p>
                             </div>

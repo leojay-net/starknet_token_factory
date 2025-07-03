@@ -8,7 +8,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 
 export function Navbar() {
-    const { account, address, isConnected, connect, disconnect, isLoading } = useWallet()
+    const { address, isConnected, connect, disconnect, isLoading } = useWallet()
     const [isMenuOpen, setIsMenuOpen] = useState(false)
     const pathname = usePathname();
 
@@ -17,13 +17,20 @@ export function Navbar() {
     }
 
     return (
-        <nav className="border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
+        <nav className="glass border-b border-white/20 dark:border-white/10 sticky top-0 z-50 backdrop-blur-xl">
             <div className="container mx-auto px-4">
                 <div className="flex items-center justify-between h-16">
                     {/* Logo */}
-                    <Link href="/" className="flex items-center space-x-2">
-                        <div className="h-8 w-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg"></div>
-                        <span className="text-xl font-bold text-slate-900 dark:text-white">
+                    <Link href="/" className="flex items-center space-x-3 group">
+                        <div className="relative">
+                            <div className="h-10 w-10 bg-[var(--stark-orange)] rounded-xl flex items-center justify-center transform transition-transform group-hover:scale-105">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="white" className="transform transition-transform group-hover:rotate-12">
+                                    <path d="M12 2L13.09 8.26L20 9L13.09 9.74L12 16L10.91 9.74L4 9L10.91 8.26L12 2Z" />
+                                </svg>
+                            </div>
+                            <div className="absolute -top-1 -right-1 w-3 h-3 bg-[var(--stark-purple)] rounded-full animate-pulse"></div>
+                        </div>
+                        <span className="text-xl font-bold text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-colors">
                             Token Factory
                         </span>
                     </Link>
@@ -33,44 +40,57 @@ export function Navbar() {
                         {pathname !== '/' && (
                             <Link
                                 href="/"
-                                className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors font-semibold"
+                                className="relative text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-all duration-300 font-medium group"
                             >
                                 Home
+                                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--stark-orange)] transition-all duration-300 group-hover:w-full"></span>
                             </Link>
                         )}
                         <Link
                             href="/create"
-                            className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                            className="relative text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-all duration-300 font-medium group"
                         >
                             Create Token
+                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--stark-orange)] transition-all duration-300 group-hover:w-full"></span>
                         </Link>
                         <Link
                             href="/dashboard"
-                            className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                            className="relative text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-all duration-300 font-medium group"
                         >
                             Dashboard
+                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--stark-orange)] transition-all duration-300 group-hover:w-full"></span>
                         </Link>
                         <Link
                             href="/explorer"
-                            className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                            className="relative text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-all duration-300 font-medium group"
                         >
                             Explorer
+                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[var(--stark-orange)] transition-all duration-300 group-hover:w-full"></span>
                         </Link>
                     </div>
 
                     {/* Wallet Connection */}
                     <div className="flex items-center space-x-4">
                         {isLoading ? (
-                            <span className="text-slate-500 dark:text-slate-400 text-sm">Connecting...</span>
+                            <div className="flex items-center space-x-2 text-[var(--stark-gray)] text-sm">
+                                <div className="w-4 h-4 border-2 border-[var(--stark-orange)] border-t-transparent rounded-full animate-spin"></div>
+                                <span>Connecting...</span>
+                            </div>
                         ) : isConnected && address ? (
-                            <div className="flex items-center space-x-2">
-                                <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:block">
-                                    {formatAddress(address)}
-                                </span>
+                            <div className="flex items-center space-x-3">
+                                <div className="flex items-center space-x-2 px-3 py-2 bg-[var(--stark-orange)]/10 rounded-xl border border-[var(--stark-orange)]/20">
+                                    <div className="connection-indicator">
+                                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    </div>
+                                    <span className="text-sm text-[var(--foreground)] font-mono hidden sm:block">
+                                        {formatAddress(address)}
+                                    </span>
+                                </div>
                                 <Button
                                     onClick={() => disconnect()}
                                     variant="outline"
                                     size="sm"
+                                    className="border-[var(--stark-orange)]/30 text-[var(--stark-orange)] hover:bg-[var(--stark-orange)] hover:text-white transition-all duration-300"
                                     disabled={isLoading}
                                 >
                                     Disconnect
@@ -79,7 +99,7 @@ export function Navbar() {
                         ) : (
                             <Button
                                 onClick={() => connect()}
-                                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                                className="bg-[var(--stark-orange)] hover:bg-[var(--stark-orange-dark)] text-white font-medium px-6 py-2 rounded-xl transform transition-all duration-300 hover:scale-105 hover-glow-orange"
                                 disabled={isLoading}
                             >
                                 <Wallet className="w-4 h-4 mr-2" />
@@ -90,7 +110,7 @@ export function Navbar() {
                         {/* Mobile Menu Button */}
                         <button
                             onClick={() => setIsMenuOpen(!isMenuOpen)}
-                            className="md:hidden p-2 text-slate-600 dark:text-slate-300"
+                            className="md:hidden p-2 text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-colors rounded-lg hover:bg-[var(--stark-orange)]/10"
                         >
                             <Menu className="w-5 h-5" />
                         </button>
@@ -99,12 +119,12 @@ export function Navbar() {
 
                 {/* Mobile Navigation */}
                 {isMenuOpen && (
-                    <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="md:hidden py-4 border-t border-white/20 dark:border-white/10 animate-slide-in-up">
                         <div className="flex flex-col space-y-4">
                             {pathname !== '/' && (
                                 <Link
                                     href="/"
-                                    className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors font-semibold"
+                                    className="text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-colors font-medium px-2 py-1 rounded-lg hover:bg-[var(--stark-orange)]/10"
                                     onClick={() => setIsMenuOpen(false)}
                                 >
                                     Home
@@ -112,21 +132,21 @@ export function Navbar() {
                             )}
                             <Link
                                 href="/create"
-                                className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                className="text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-colors font-medium px-2 py-1 rounded-lg hover:bg-[var(--stark-orange)]/10"
                                 onClick={() => setIsMenuOpen(false)}
                             >
                                 Create Token
                             </Link>
                             <Link
                                 href="/dashboard"
-                                className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                className="text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-colors font-medium px-2 py-1 rounded-lg hover:bg-[var(--stark-orange)]/10"
                                 onClick={() => setIsMenuOpen(false)}
                             >
                                 Dashboard
                             </Link>
                             <Link
                                 href="/explorer"
-                                className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+                                className="text-[var(--foreground)] hover:text-[var(--stark-orange)] transition-colors font-medium px-2 py-1 rounded-lg hover:bg-[var(--stark-orange)]/10"
                                 onClick={() => setIsMenuOpen(false)}
                             >
                                 Explorer

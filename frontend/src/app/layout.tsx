@@ -21,11 +21,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${inter.variable} font-sans antialiased min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800`}
+        className={`${inter.variable} font-sans antialiased min-h-screen bg-circuit-pattern relative`}
       >
-        <Providers>
-          {children}
-        </Providers>
+        <div className="absolute inset-0 bg-web3-grid opacity-30 pointer-events-none"></div>
+        <div className="relative z-10">
+          <Providers>
+            {children}
+          </Providers>
+        </div>
       </body>
     </html>
   );
