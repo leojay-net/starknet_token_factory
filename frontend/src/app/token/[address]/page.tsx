@@ -20,7 +20,7 @@ import { ERC20TokenData, ERC721TokenData, TokenTransaction } from '@/types'
 import { useTokenData } from '@/hooks/useTokenData'
 import { useWallet } from '@/contexts/WalletContext'
 import { useToast } from '@/components/ui/toaster'
-import { getERC721Contract, encodeByteArrayForCallData, provider } from '@/lib/starknet'
+import { getERC721Contract, getERC20Contract, encodeByteArrayForCallData, provider, bigIntToU256 } from '@/lib/starknet'
 import { CallData } from 'starknet'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
@@ -52,6 +52,18 @@ export default function TokenPage() {
     const [selectedNft, setSelectedNft] = useState<any>(null)
     const [transferAddress, setTransferAddress] = useState('')
     const [isTransferring, setIsTransferring] = useState(false)
+
+    // === ERC20 Mint State ===
+    const [showErc20MintModal, setShowErc20MintModal] = useState(false)
+    const [erc20MintRecipient, setErc20MintRecipient] = useState(address || '')
+    const [erc20MintAmount, setErc20MintAmount] = useState('')
+    const [isErc20Minting, setIsErc20Minting] = useState(false)
+
+    // === ERC20 Transfer State ===
+    const [showErc20TransferModal, setShowErc20TransferModal] = useState(false)
+    const [erc20TransferRecipient, setErc20TransferRecipient] = useState('')
+    const [erc20TransferAmount, setErc20TransferAmount] = useState('')
+    const [isErc20Transferring, setIsErc20Transferring] = useState(false)
 
     useEffect(() => {
         if (tokenAddress && tokenData && tokenData.type === 'ERC721') {
@@ -495,6 +507,64 @@ export default function TokenPage() {
         }
     };
 
+    // === ERC20 Mint Handler ===
+    const handleErc20Mint = async () => {
+        if (!account || !isConnected) {
+            addToast({ title: 'Error', description: 'Please connect your wallet first.', variant: 'destructive' })
+            return
+        }
+        if (!erc20MintRecipient || !erc20MintAmount) {
+            addToast({ title: 'Error', description: 'Recipient and amount required.', variant: 'destructive' })
+            return
+        }
+        setIsErc20Minting(true)
+        try {
+            const contract = getERC20Contract(tokenAddress, account)
+            const decimals = (tokenData as ERC20TokenData).decimals
+            const amount = BigInt(Math.floor(Number(erc20MintAmount) * 10 ** decimals))
+            const calldata = [erc20MintRecipient, bigIntToU256(amount)]
+            const result = await contract.invoke('mint', calldata)
+            await provider.waitForTransaction(result.transaction_hash)
+            addToast({ title: 'Success!', description: `Minted ${erc20MintAmount} ${tokenData.symbol} to ${formatAddress(erc20MintRecipient)}` })
+            setShowErc20MintModal(false)
+            setErc20MintRecipient(address || '')
+            setErc20MintAmount('')
+        } catch (error) {
+            addToast({ title: 'Error', description: 'Mint failed. Are you the owner?', variant: 'destructive' })
+        } finally {
+            setIsErc20Minting(false)
+        }
+    }
+
+    // === ERC20 Transfer Handler ===
+    const handleErc20Transfer = async () => {
+        if (!account || !isConnected) {
+            addToast({ title: 'Error', description: 'Please connect your wallet first.', variant: 'destructive' })
+            return
+        }
+        if (!erc20TransferRecipient || !erc20TransferAmount) {
+            addToast({ title: 'Error', description: 'Recipient and amount required.', variant: 'destructive' })
+            return
+        }
+        setIsErc20Transferring(true)
+        try {
+            const contract = getERC20Contract(tokenAddress, account)
+            const decimals = (tokenData as ERC20TokenData).decimals
+            const amount = BigInt(Math.floor(Number(erc20TransferAmount) * 10 ** decimals))
+            const calldata = [erc20TransferRecipient, bigIntToU256(amount)]
+            const result = await contract.invoke('transfer', calldata)
+            await provider.waitForTransaction(result.transaction_hash)
+            addToast({ title: 'Success!', description: `Transferred ${erc20TransferAmount} ${tokenData.symbol} to ${formatAddress(erc20TransferRecipient)}` })
+            setShowErc20TransferModal(false)
+            setErc20TransferRecipient('')
+            setErc20TransferAmount('')
+        } catch (error) {
+            addToast({ title: 'Error', description: 'Transfer failed.', variant: 'destructive' })
+        } finally {
+            setIsErc20Transferring(false)
+        }
+    }
+
     if (loading) {
         return (
             <div className="container mx-auto px-4 py-8">
@@ -642,6 +712,13 @@ export default function TokenPage() {
                                         </div>
                                     </div>
                                 </div>
+                                {/* ERC20 Mint/Transfer Buttons */}
+                                {isERC20 && isConnected && (
+                                    <div className="flex flex-col space-y-2">
+                                        <Button onClick={() => setShowErc20MintModal(true)} className="bg-gradient-to-r from-green-500 to-yellow-500 text-white">Mint</Button>
+                                        <Button onClick={() => setShowErc20TransferModal(true)} className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">Transfer</Button>
+                                    </div>
+                                )}
                             </div>
                         </CardHeader>
                         <CardContent className="relative">
@@ -1171,6 +1248,70 @@ export default function TokenPage() {
                             className="w-full"
                         >
                             {isTransferring ? 'Transferring...' : 'Transfer'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ERC20 Mint Modal */}
+            <Dialog open={showErc20MintModal} onOpenChange={setShowErc20MintModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Mint {tokenData?.symbol} Tokens</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="Recipient Address"
+                            value={erc20MintRecipient}
+                            onChange={e => setErc20MintRecipient(e.target.value)}
+                            className="w-full px-4 py-2 border rounded"
+                        />
+                        <input
+                            type="number"
+                            placeholder={`Amount (${tokenData?.symbol})`}
+                            value={erc20MintAmount}
+                            onChange={e => setErc20MintAmount(e.target.value)}
+                            className="w-full px-4 py-2 border rounded"
+                        />
+                        <Button
+                            onClick={handleErc20Mint}
+                            disabled={isErc20Minting || !erc20MintRecipient || !erc20MintAmount}
+                            className="w-full"
+                        >
+                            {isErc20Minting ? 'Minting...' : 'Mint'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* ERC20 Transfer Modal */}
+            <Dialog open={showErc20TransferModal} onOpenChange={setShowErc20TransferModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Transfer {tokenData?.symbol} Tokens</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <input
+                            type="text"
+                            placeholder="Recipient Address"
+                            value={erc20TransferRecipient}
+                            onChange={e => setErc20TransferRecipient(e.target.value)}
+                            className="w-full px-4 py-2 border rounded"
+                        />
+                        <input
+                            type="number"
+                            placeholder={`Amount (${tokenData?.symbol})`}
+                            value={erc20TransferAmount}
+                            onChange={e => setErc20TransferAmount(e.target.value)}
+                            className="w-full px-4 py-2 border rounded"
+                        />
+                        <Button
+                            onClick={handleErc20Transfer}
+                            disabled={isErc20Transferring || !erc20TransferRecipient || !erc20TransferAmount}
+                            className="w-full"
+                        >
+                            {isErc20Transferring ? 'Transferring...' : 'Transfer'}
                         </Button>
                     </div>
                 </DialogContent>
