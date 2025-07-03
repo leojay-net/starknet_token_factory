@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useWallet } from '@/contexts/WalletContext'
 import { Coins, Image, ArrowRight, Loader2 } from 'lucide-react'
@@ -23,6 +23,10 @@ export default function CreatePage() {
         initial_supply: '',
         base_uri: '',
     })
+    const [nftImage, setNftImage] = useState<File | null>(null)
+    const [nftImageUrl, setNftImageUrl] = useState<string>("")
+    const [uploadingImage, setUploadingImage] = useState(false)
+    const fileInputRef = useRef<HTMLInputElement | null>(null)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -56,13 +60,17 @@ export default function CreatePage() {
                 console.log('ERC20 token created:', result)
             } else {
                 // Create ERC721 token
-                if (!formData.base_uri) {
+                let baseUri = formData.base_uri
+                if (nftImage && nftImageUrl) {
+                    baseUri = nftImageUrl
+                }
+                if (!baseUri) {
                     throw new Error('Base URI is required for ERC721 tokens')
                 }
                 const calldata = CallData.compile({
                     name: encodeByteArrayForCallData(formData.name),
                     symbol: encodeByteArrayForCallData(formData.symbol),
-                    base_uri: encodeByteArrayForCallData(formData.base_uri)
+                    base_uri: encodeByteArrayForCallData(baseUri)
                 })
                 result = await contract.invoke('create_erc721', calldata)
                 console.log('ERC721 token created:', result)
@@ -103,8 +111,8 @@ export default function CreatePage() {
             // Redirect to token page if we have the address, otherwise to dashboard
             if (tokenAddress) {
                 // Ensure token address is in hex format for the URL
-                let hexTokenAddress = tokenAddress;
-                if (!tokenAddress.startsWith('0x')) {
+                let hexTokenAddress = String(tokenAddress);
+                if (!hexTokenAddress.startsWith('0x')) {
                     hexTokenAddress = '0x' + BigInt(tokenAddress).toString(16);
                 }
                 console.log('Redirecting to token page with address:', hexTokenAddress);
@@ -127,6 +135,45 @@ export default function CreatePage() {
             })
         } finally {
             setIsCreating(false)
+        }
+    }
+
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0] || null
+        setNftImage(file)
+
+        if (file) {
+            // Start uploading immediately when file is selected
+            await uploadNftImage(file)
+        } else {
+            setNftImageUrl("")
+            setUploadingImage(false)
+        }
+    }
+
+    const uploadNftImage = async (file: File) => {
+        if (!file) return ""
+        setUploadingImage(true)
+        try {
+            const data = new FormData()
+            data.set("file", file)
+            const uploadRequest = await fetch("/api/files", {
+                method: "POST",
+                body: data,
+            })
+            const url = await uploadRequest.json()
+            setNftImageUrl(url)
+            return url
+        } catch (error) {
+            console.error('Error uploading image:', error)
+            addToast({
+                title: 'Upload Error',
+                description: 'Failed to upload image. Please try again.',
+                variant: 'destructive',
+            })
+            return ""
+        } finally {
+            setUploadingImage(false)
         }
     }
 
@@ -276,31 +323,59 @@ export default function CreatePage() {
                             {selectedType === 'erc721' && (
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                                        Base URI
+                                        Upload NFT Image
                                     </label>
                                     <input
-                                        type="url"
-                                        value={formData.base_uri}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, base_uri: e.target.value }))}
-                                        placeholder="https://api.example.com/metadata/"
-                                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        required
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        ref={fileInputRef}
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     />
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                        Base URL for token metadata (JSON files)
-                                    </p>
+                                    {uploadingImage && (
+                                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                            <div className="flex items-center space-x-2">
+                                                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                                                <span className="text-sm text-blue-700 dark:text-blue-300">Uploading image to IPFS...</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {nftImageUrl && !uploadingImage && (
+                                        <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                            <div className="flex items-center space-x-2 mb-2">
+                                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                                <span className="text-sm text-green-700 dark:text-green-300 font-medium">Image uploaded successfully!</span>
+                                            </div>
+                                            <img
+                                                src={nftImageUrl}
+                                                alt="NFT Preview"
+                                                className="max-w-full h-auto rounded-lg border border-slate-200 dark:border-slate-600"
+                                                style={{ maxHeight: 200 }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
                             <button
                                 type="submit"
-                                disabled={isCreating}
+                                disabled={isCreating || (selectedType === 'erc721' && (uploadingImage || (nftImage && !nftImageUrl)))}
                                 className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-4 px-6 rounded-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                             >
                                 {isCreating ? (
                                     <>
                                         <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                                         Creating Token...
+                                    </>
+                                ) : selectedType === 'erc721' && uploadingImage ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                        Uploading Image...
+                                    </>
+                                ) : selectedType === 'erc721' && nftImage && !nftImageUrl ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                        Processing Image...
                                     </>
                                 ) : (
                                     <>

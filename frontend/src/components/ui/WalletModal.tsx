@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useConnect, useAccount } from '@starknet-react/core'
+import { useWallet } from '@/contexts/WalletContext'
 import {
     X,
     Wallet,
@@ -33,60 +33,49 @@ const walletInfo = {
 }
 
 export function WalletModal({ isOpen, onClose }: WalletModalProps) {
-    const { connectors, connect, isPending, error } = useConnect()
-    const { isConnected } = useAccount()
-    const [selectedConnector, setSelectedConnector] = useState<string | null>(null)
-    const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle')
-    const [mounted, setMounted] = useState(false)
+    const { connect, isConnected, isLoading } = useWallet();
+    const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle');
+    const [error, setError] = useState<string | null>(null);
+    const [mounted, setMounted] = useState(false);
 
-    // Ensure we're mounted on the client side
     useEffect(() => {
-        setMounted(true)
-    }, [])
+        setMounted(true);
+    }, []);
 
-    // Close modal when successfully connected
     useEffect(() => {
         if (isConnected) {
-            setConnectionStatus('success')
+            setConnectionStatus('success');
             setTimeout(() => {
-                onClose()
-                setConnectionStatus('idle')
-                setSelectedConnector(null)
-            }, 1500)
+                onClose();
+                setConnectionStatus('idle');
+                setError(null);
+            }, 1500);
         }
-    }, [isConnected, onClose])
+    }, [isConnected, onClose]);
 
-    // Handle connection errors
-    useEffect(() => {
-        if (error) {
-            setConnectionStatus('error')
-            setSelectedConnector(null)
-        }
-    }, [error])
-
-    const handleConnect = async (connector: any) => {
+    const handleConnect = async () => {
+        setConnectionStatus('connecting');
+        setError(null);
         try {
-            setSelectedConnector(connector.id)
-            setConnectionStatus('connecting')
-            await connect({ connector })
-        } catch (err) {
-            setConnectionStatus('error')
-            setSelectedConnector(null)
+            await connect();
+        } catch (err: any) {
+            setConnectionStatus('error');
+            setError(err?.message || 'Failed to connect wallet. Please try again.');
         }
-    }
+    };
 
     const handleRetry = () => {
-        setConnectionStatus('idle')
-        setSelectedConnector(null)
-    }
+        setConnectionStatus('idle');
+        setError(null);
+    };
 
     const handleClose = () => {
-        onClose()
-        setConnectionStatus('idle')
-        setSelectedConnector(null)
-    }
+        onClose();
+        setConnectionStatus('idle');
+        setError(null);
+    };
 
-    if (!isOpen || !mounted) return null
+    if (!isOpen || !mounted) return null;
 
     const modalContent = (
         <>
@@ -152,7 +141,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
                                     Connection Failed
                                 </h3>
                                 <p className="text-slate-500 dark:text-slate-400 mb-6 text-sm">
-                                    {error?.message || 'Please try again'}
+                                    {error || 'Please try again'}
                                 </p>
                                 <button
                                     onClick={handleRetry}
@@ -165,50 +154,31 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
                         ) : (
                             // Wallet Selection
                             <div className="space-y-3">
-                                {connectors.map((connector) => {
-                                    const isConnecting = connectionStatus === 'connecting' && selectedConnector === connector.id
-                                    const isAvailable = connector.available()
-                                    const info = walletInfo[connector.id as keyof typeof walletInfo]
-
-                                    return (
-                                        <button
-                                            key={connector.id}
-                                            onClick={() => handleConnect(connector)}
-                                            disabled={!isAvailable || isPending}
-                                            className={`
-                        w-full p-4 rounded-xl border transition-all duration-200 group
-                        ${isAvailable
-                                                    ? 'border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer hover:scale-[1.02]'
-                                                    : 'border-slate-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
-                                                }
-                        ${isConnecting ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : ''}
-                      `}
-                                        >
-                                            <div className="flex items-center space-x-4">
-                                                {/* Wallet Icon */}
-                                                <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-xl transition-transform duration-200 group-hover:scale-110">
-                                                    <span>{info?.icon || '💼'}</span>
-                                                </div>
-
-                                                <div className="flex-1 text-left">
-                                                    <h3 className="font-semibold text-slate-900 dark:text-white">
-                                                        {info?.name || connector.name}
-                                                    </h3>
-                                                    {!isAvailable && (
-                                                        <p className="text-sm text-red-500">Not installed</p>
-                                                    )}
-                                                </div>
-
-                                                {isConnecting && (
-                                                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                                                )}
-                                            </div>
-                                        </button>
-                                    )
-                                })}
+                                <button
+                                    onClick={handleConnect}
+                                    disabled={isLoading || connectionStatus === 'connecting'}
+                                    className={`w-full p-4 rounded-xl border transition-all duration-200 group border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 cursor-pointer hover:scale-[1.02] ${isLoading || connectionStatus === 'connecting' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <div className="flex items-center space-x-4">
+                                        {/* Wallet Icon */}
+                                        <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center text-xl transition-transform duration-200 group-hover:scale-110">
+                                            <span role="img" aria-label="Argent X">🦙</span>
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <h3 className="font-semibold text-slate-900 dark:text-white">
+                                                Argent X / Braavos
+                                            </h3>
+                                            <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                Connect with your browser wallet
+                                            </p>
+                                        </div>
+                                        {(isLoading || connectionStatus === 'connecting') && (
+                                            <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                                        )}
+                                    </div>
+                                </button>
                             </div>
                         )}
-
                         {/* Simple footer */}
                         {connectionStatus === 'idle' && (
                             <div className="mt-6 text-center">
@@ -221,7 +191,7 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
                 </div>
             </div>
         </>
-    )
+    );
 
-    return createPortal(modalContent, document.body)
+    return mounted ? createPortal(modalContent, document.body) : null;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getTokenFactoryContract, getERC20Contract, getERC721Contract } from '@/lib/starknet';
-import { ERC20TokenData, ERC721TokenData } from '@/types';
+import { ERC20TokenData, ERC721TokenData, NFTMetadata } from '@/types';
 
 type TokenData = ERC20TokenData | ERC721TokenData;
 
@@ -102,12 +102,40 @@ export function useTokenData(tokenAddress: string) {
                             console.log('base_uri method not available');
                         }
 
+                        // Try to get token URI for token ID 1 (first NFT)
+                        let tokenUri = '';
+                        let metadata: NFTMetadata | undefined;
+                        
+                        try {
+                            // Try to get token URI for the first token (ID 1)
+                            const tokenUriResult = await erc721Contract.call('token_uri', [{ low: 1n, high: 0n }]);
+                            tokenUri = parseByteArray(tokenUriResult);
+                            console.log('Token URI for token 1:', tokenUri);
+
+                            // If we have a token URI, try to fetch metadata
+                            if (tokenUri) {
+                                try {
+                                    const metadataResponse = await fetch(tokenUri);
+                                    if (metadataResponse.ok) {
+                                        metadata = await metadataResponse.json();
+                                        console.log('Fetched metadata:', metadata);
+                                    }
+                                } catch (metadataError) {
+                                    console.warn('Failed to fetch metadata from token URI:', metadataError);
+                                }
+                            }
+                        } catch (tokenUriError) {
+                            console.log('token_uri method not available or failed:', tokenUriError);
+                        }
+
                         tokenData = {
                             address: hexTokenAddress,
                             type: 'ERC721',
                             name,
                             symbol,
-                            baseUri
+                            baseUri,
+                            tokenUri,
+                            metadata
                         } as ERC721TokenData;
 
                         console.log('ERC721 token data:', tokenData);

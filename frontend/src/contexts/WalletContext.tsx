@@ -11,7 +11,7 @@ type ConnectedStarknetWindowObject = any;
 // Import browser-only modules
 let getStarknet: any = null;
 
-const TOKEN_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_FACTORY_ADDRESS || "0x02197940985f5fafcf93e618571b8b961a2290eb8621c24c4c5b066c4efc2b43";
+const TOKEN_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_FACTORY_ADDRESS || "0x03e63a14c0048742873a97d8bba18de5cec7d54acf6f8a560b2afce3ae1ef534";
 
 interface WalletContextType {
     isLoading: boolean;
@@ -39,46 +39,26 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const initStarknet = async () => {
             try {
                 setIsLoading(true);
-                // Check if starknet is available in the browser window
                 if (typeof window !== 'undefined' && (window as any).starknet) {
                     getStarknet = (window as any).starknet;
-                    console.log('Starknet wallet detected:', getStarknet);
-
-                    // Add event listeners for wallet changes
-                    if (getStarknet.on) {
-                        getStarknet.on('accountsChanged', (accounts: string[]) => {
-                            console.log('Accounts changed:', accounts);
-                            if (accounts.length === 0) {
-                                // User disconnected
-                                setAccount(null);
-                                setAddress(null);
-                                setIsConnected(false);
-                                localStorage.removeItem('wallet_connected');
-                            } else {
-                                // Account changed, try to reconnect
-                                tryConnect();
-                            }
-                        });
-
-                        getStarknet.on('networkChanged', (network: string) => {
-                            console.log('Network changed:', network);
-                            // Optionally handle network changes
-                        });
-                    }
-
-                    // Check if user was previously connected
                     const wasConnected = localStorage.getItem('wallet_connected') === 'true';
                     if (wasConnected) {
-                        console.log('Attempting to restore previous connection...');
-                        const restored = await tryConnect();
-                        if (restored) {
-                            console.log('Connection restored successfully');
-                        } else {
-                            console.log('Failed to restore connection');
+                        // Always call enable to restore session
+                        try {
+                            await getStarknet.enable({ starknetVersion: "v5" });
+                            if (getStarknet.account && getStarknet.account.address) {
+                                setAccount(getStarknet.account);
+                                setAddress(getStarknet.account.address);
+                                setIsConnected(true);
+                            }
+                        } catch (err) {
+                            // If enable fails, clear the flag
+                            localStorage.removeItem('wallet_connected');
+                            setIsConnected(false);
+                            setAccount(null);
+                            setAddress(null);
                         }
                     }
-                } else {
-                    console.log('No Starknet wallet detected. User needs to install ArgentX or Braavos.');
                 }
             } catch (error) {
                 console.error("Failed to initialize Starknet:", error);
@@ -90,13 +70,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
         // Set a timeout to ensure loading doesn't get stuck
         const timeout = setTimeout(() => {
-            // Only timeout if we're still loading and not connected
-            if (isLoading && !isConnected) {
-                console.warn('Wallet initialization timeout - forcing loading to false');
-                setIsInitialized(true);
-                setIsLoading(false);
-            }
-        }, 5000); // 5 second timeout
+            console.warn('Wallet initialization timeout - forcing loading to false');
+            setIsInitialized(true);
+            setIsLoading(false);
+        }, 10000);
 
         initStarknet();
 
@@ -116,33 +93,24 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         })
         : null;
 
-    const tryConnect = async (): Promise<boolean> => {
-        if (!getStarknet || !isInitialized) return false;
+    const tryConnect = async () => {
+        if (!getStarknet || !isInitialized) return;
 
         try {
-            // Always call enable to restore connection (showModal: false = silent)
-            const result = await getStarknet.enable({ starknetVersion: "v5", showModal: false });
-            if (result && getStarknet.account && getStarknet.account.address) {
-                setAccount(getStarknet.account);
-                setAddress(getStarknet.account.address);
-                setIsConnected(true);
-                localStorage.setItem('wallet_connected', 'true');
-                console.log('Restored wallet connection:', getStarknet.account.address);
-                return true;
+            // Check if wallet is already connected
+            if (getStarknet.isConnected) {
+                const account = getStarknet.account;
+                if (account && account.address) {
+                    console.log('Auto-connecting to:', account.address);
+                    setAccount(account);
+                    setAddress(account.address);
+                    setIsConnected(true);
+                    localStorage.setItem('wallet_connected', 'true');
+                }
             }
-            // If no account, clear state
-            setAccount(null);
-            setAddress(null);
-            setIsConnected(false);
-            localStorage.removeItem('wallet_connected');
-            return false;
         } catch (error) {
-            console.warn('Failed to restore connection', error);
-            setAccount(null);
-            setAddress(null);
-            setIsConnected(false);
+            console.error('Auto-connect failed:', error);
             localStorage.removeItem('wallet_connected');
-            return false;
         }
     };
 
@@ -154,13 +122,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
         setIsLoading(true);
         try {
-            console.log('Requesting wallet connection...');
-
             // Request connection to the wallet
-            const result = await getStarknet.enable({
-                starknetVersion: "v5",
-                showModal: true // Show modal for manual connection
-            });
+            const result = await getStarknet.enable({ starknetVersion: "v5" });
 
             if (result && result.length > 0) {
                 const account = getStarknet.account;
@@ -184,23 +147,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             }
         } catch (error) {
             console.error('Failed to connect wallet:', error);
-
-            // Clear any stored connection state on error
-            localStorage.removeItem('wallet_connected');
-            setAccount(null);
-            setAddress(null);
-            setIsConnected(false);
-
-            // Show user-friendly error message
-            if (error instanceof Error) {
-                if (error.message.includes('rejected') || error.message.includes('denied')) {
-                    alert('Wallet connection was rejected. Please try again and approve the connection.');
-                } else {
-                    alert(`Failed to connect wallet: ${error.message}`);
-                }
-            } else {
-                alert('Failed to connect wallet. Please make sure you have ArgentX or Braavos installed and try again.');
-            }
+            alert('Failed to connect wallet. Please make sure you have ArgentX or Braavos installed and try again.');
         } finally {
             setIsLoading(false);
         }
@@ -242,4 +189,4 @@ export function useWallet() {
         throw new Error('useWallet must be used within a WalletProvider');
     }
     return context;
-}
+} 

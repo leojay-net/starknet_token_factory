@@ -15,18 +15,27 @@ import {
     Filter,
     Calendar,
     BarChart3,
-    Info
+    Info,
+    Copy
 } from 'lucide-react'
 import Link from 'next/link'
-import { useGlobalTokens } from '@/hooks/useGlobalTokens'
+import { useAllTokens } from '@/hooks/useAllTokens'
 import { useWallet } from '@/contexts/WalletContext'
 
 export default function ExplorerPage() {
-    const { allTokens, globalStats, loading, error } = useGlobalTokens()
+    const { tokens: allTokens, loading, error } = useAllTokens()
     const { isConnected, connect } = useWallet()
     const [filteredTokens, setFilteredTokens] = useState(allTokens)
     const [searchQuery, setSearchQuery] = useState('')
     const [activeFilter, setActiveFilter] = useState<'all' | 'erc20' | 'erc721'>('all')
+
+    // Calculate stats from allTokens
+    const totalTokens = allTokens.length
+    const totalERC20 = allTokens.filter(token => token.token_type === 0).length
+    const totalERC721 = allTokens.filter(token => token.token_type === 1).length
+    // Placeholder values for transactions and users
+    const totalTransactions = 0
+    const activeUsers = 0
 
     useEffect(() => {
         filterTokens()
@@ -90,14 +99,13 @@ export default function ExplorerPage() {
                                     Total Tokens
                                 </p>
                                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    {formatNumber(globalStats?.total_tokens || 0)}
+                                    {formatNumber(totalTokens)}
                                 </p>
                             </div>
                             <Coins className="h-6 w-6 text-blue-600" />
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card>
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between">
@@ -106,14 +114,13 @@ export default function ExplorerPage() {
                                     ERC20 Tokens
                                 </p>
                                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    {formatNumber(globalStats?.total_erc20 || 0)}
+                                    {formatNumber(totalERC20)}
                                 </p>
                             </div>
                             <TrendingUp className="h-6 w-6 text-green-600" />
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card>
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between">
@@ -122,14 +129,13 @@ export default function ExplorerPage() {
                                     NFT Collections
                                 </p>
                                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    {formatNumber(globalStats?.total_erc721 || 0)}
+                                    {formatNumber(totalERC721)}
                                 </p>
                             </div>
                             <Palette className="h-6 w-6 text-purple-600" />
                         </div>
                     </CardContent>
                 </Card>
-
                 <Card>
                     <CardContent className="p-6">
                         <div className="flex items-center justify-between">
@@ -138,26 +144,10 @@ export default function ExplorerPage() {
                                     Transactions
                                 </p>
                                 <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    {formatNumber(globalStats?.total_transactions || 0)}
+                                    {formatNumber(totalTransactions)}
                                 </p>
                             </div>
                             <BarChart3 className="h-6 w-6 text-orange-600" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                    Active Users
-                                </p>
-                                <p className="text-2xl font-bold text-slate-900 dark:text-white">
-                                    {formatNumber(globalStats?.active_users || 0)}
-                                </p>
-                            </div>
-                            <Users className="h-6 w-6 text-indigo-600" />
                         </div>
                     </CardContent>
                 </Card>
@@ -228,99 +218,113 @@ export default function ExplorerPage() {
             )}
 
             {/* Tokens List */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>All Tokens</CardTitle>
-                    <CardDescription>
-                        {filteredTokens.length} token{filteredTokens.length !== 1 ? 's' : ''} found
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                        <div className="flex items-center justify-center py-12">
-                            <div className="text-center">
-                                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                                <p className="text-slate-600 dark:text-slate-400">Loading tokens...</p>
-                            </div>
-                        </div>
-                    ) : filteredTokens.length === 0 ? (
-                        <div className="text-center py-12">
-                            <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                                <Search className="h-8 w-8 text-slate-400" />
-                            </div>
-                            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                                {!isConnected ? 'No tokens visible' : 'No tokens found'}
-                            </h3>
-                            <p className="text-slate-600 dark:text-slate-400 mb-4">
-                                {!isConnected
-                                    ? 'Connect your wallet to see tokens you\'ve created, or create your first token to get started.'
-                                    : 'Try adjusting your search criteria or filters, or create your first token.'
-                                }
-                            </p>
-                            <div className="space-x-2">
-                                {!isConnected && (
-                                    <Button onClick={connect} variant="outline" size="sm">
-                                        Connect Wallet
-                                    </Button>
-                                )}
-                                <Link href="/create">
-                                    <Button size="sm">
-                                        Create Token
-                                    </Button>
-                                </Link>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {filteredTokens.map((token, index) => (
-                                <div
-                                    key={index}
-                                    className="flex items-center justify-between p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                                >
-                                    <div className="flex items-center space-x-4">
-                                        <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                                            {token.token_type === 0 ? (
-                                                <Coins className="h-6 w-6 text-white" />
-                                            ) : (
-                                                <Palette className="h-6 w-6 text-white" />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h4 className="font-semibold text-slate-900 dark:text-white">
-                                                {token.name}
-                                            </h4>
-                                            <div className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-400">
-                                                <span>{token.symbol}</span>
-                                                <span>•</span>
-                                                <span>{token.token_type === 0 ? 'ERC20' : 'ERC721'}</span>
-                                                <span>•</span>
-                                                <span>{formatAddress(token.token_address)}</span>
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg overflow-hidden">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
+                        All Tokens
+                    </h2>
+                    <p className="text-slate-600 dark:text-slate-300 mt-1">
+                        Browse all tokens created on the platform
+                    </p>
+                </div>
+                {loading ? (
+                    <div className="p-12 text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-slate-600 dark:text-slate-300">Loading tokens...</p>
+                    </div>
+                ) : filteredTokens.length === 0 ? (
+                    <div className="p-12 text-center">
+                        <Coins className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
+                            No tokens found
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-300 mb-6">
+                            Try adjusting your search or filters
+                        </p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead className="bg-slate-50 dark:bg-slate-700">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        Token
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        Type
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        Address
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        Created
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                                {filteredTokens.map((token) => (
+                                    <tr key={token.token_address} className="hover:bg-slate-50 dark:hover:bg-slate-700">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center">
+                                                <div className="flex-shrink-0 h-10 w-10">
+                                                    <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                                                        {token.token_type === 0 ? (
+                                                            <Coins className="w-5 h-5 text-white" />
+                                                        ) : (
+                                                            <Palette className="w-5 h-5 text-white" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="ml-4">
+                                                    <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                                        {token.name}
+                                                    </div>
+                                                    <div className="text-sm text-slate-500 dark:text-slate-400">
+                                                        {token.symbol}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center space-x-4">
-                                        <div className="text-right">
-                                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                                                Created
-                                            </p>
-                                            <p className="text-sm font-medium text-slate-900 dark:text-white">
-                                                {formatDate(parseInt(token.created_at))}
-                                            </p>
-                                        </div>
-                                        <Link
-                                            href={`/token/${token.token_address}`}
-                                            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                                        >
-                                            <ArrowUpRight className="h-4 w-4" />
-                                        </Link>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${token.token_type === 0
+                                                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                                : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                                                }`}>
+                                                {token.token_type === 0 ? 'ERC20' : 'ERC721'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-900 dark:text-white">
+                                            <div className="flex items-center space-x-2">
+                                                <span>{formatAddress(token.token_address)}</span>
+                                                <button
+                                                    onClick={() => navigator.clipboard.writeText(token.token_address)}
+                                                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                                                >
+                                                    <Copy className="w-3 h-3" />
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500 dark:text-slate-400">
+                                            {new Date(Number(token.created_at) * 1000).toLocaleDateString()}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <Link
+                                                href={`/token/${token.token_address}`}
+                                                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                            >
+                                                View Details
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
         </div>
     )
 }

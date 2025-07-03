@@ -1,7 +1,7 @@
 const { Contract, RpcProvider, constants } = require('starknet');
 
 // Test configuration
-const CONTRACT_ADDRESS = '0x02197940985f5fafcf93e618571b8b961a2290eb8621c24c4c5b066c4efc2b43';
+const CONTRACT_ADDRESS = '0x03e63a14c0048742873a97d8bba18de5cec7d54acf6f8a560b2afce3ae1ef534';
 const RPC_URL = 'https://starknet-sepolia.public.blastapi.io/rpc/v0_7';
 
 // Simple ABI for testing

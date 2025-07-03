@@ -4,17 +4,14 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
     ArrowLeft,
     Copy,
     ExternalLink,
-    TrendingUp,
     Activity,
-    Users,
-    Calendar,
     Coins,
-    Palette
+    Palette,
+    Image as ImageIcon
 } from 'lucide-react'
 import Link from 'next/link'
 import { ERC20TokenData, ERC721TokenData, TokenTransaction } from '@/types'
@@ -25,7 +22,6 @@ export default function TokenPage() {
     const tokenAddress = params.address as string
     const { tokenData, loading, error } = useTokenData(tokenAddress)
     const [transactions, setTransactions] = useState<TokenTransaction[]>([])
-    const [transactionsLoading, setTransactionsLoading] = useState(true)
 
     useEffect(() => {
         if (tokenAddress) {
@@ -34,7 +30,6 @@ export default function TokenPage() {
     }, [tokenAddress])
 
     const fetchTransactionHistory = async () => {
-        setTransactionsLoading(true)
         try {
             // TODO: Implement real transaction history fetching
             // For now, we'll show empty transactions since we don't have event indexing
@@ -42,8 +37,6 @@ export default function TokenPage() {
             setTransactions([])
         } catch (error) {
             console.error('Failed to fetch transaction history:', error)
-        } finally {
-            setTransactionsLoading(false)
         }
     }
 
@@ -112,7 +105,7 @@ export default function TokenPage() {
                         Token Not Found
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400 mb-8">
-                        The token address you're looking for doesn't exist or hasn't been created through our factory.
+                        The token address you&apos;re looking for doesn&apos;t exist or hasn&apos;t been created through our factory.
                     </p>
                     <Link href="/explorer">
                         <Button>Back to Explorer</Button>
@@ -123,6 +116,7 @@ export default function TokenPage() {
     }
 
     const isERC20 = tokenData.type === 'ERC20'
+    const erc721Data = tokenData as ERC721TokenData
 
     return (
         <div className="container mx-auto px-4 py-8">
@@ -207,18 +201,114 @@ export default function TokenPage() {
                                 )}
 
                                 {!isERC20 && tokenData.type === 'ERC721' && (
-                                    <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                            Base URI
-                                        </span>
-                                        <code className="text-sm font-mono text-slate-900 dark:text-white">
-                                            {(tokenData as ERC721TokenData).baseUri || 'Not available'}
-                                        </code>
-                                    </div>
+                                    <>
+                                        <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                            <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                                Base URI
+                                            </span>
+                                            <code className="text-sm font-mono text-slate-900 dark:text-white">
+                                                {erc721Data.baseUri || 'Not available'}
+                                            </code>
+                                        </div>
+                                        {erc721Data.tokenUri && (
+                                            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                                <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                                                    Token URI (ID 1)
+                                                </span>
+                                                <code className="text-sm font-mono text-slate-900 dark:text-white">
+                                                    {erc721Data.tokenUri}
+                                                </code>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* NFT Preview Section */}
+                    {!isERC20 && erc721Data.metadata && (
+                        <Card className="mt-6">
+                            <CardHeader>
+                                <CardTitle className="flex items-center space-x-2">
+                                    <ImageIcon className="h-5 w-5" />
+                                    <span>NFT Preview</span>
+                                </CardTitle>
+                                <CardDescription>
+                                    Metadata for the first NFT in this collection
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* NFT Image */}
+                                    {erc721Data.metadata.image && (
+                                        <div className="space-y-3">
+                                            <h4 className="font-medium text-slate-900 dark:text-white">Image</h4>
+                                            <div className="relative">
+                                                <img
+                                                    src={erc721Data.metadata.image}
+                                                    alt={erc721Data.metadata.name || 'NFT Preview'}
+                                                    className="w-full h-auto rounded-lg border border-slate-200 dark:border-slate-600 max-h-96 object-contain"
+                                                    onError={(e) => {
+                                                        const target = e.target as HTMLImageElement;
+                                                        target.style.display = 'none';
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* NFT Metadata */}
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-slate-900 dark:text-white">Metadata</h4>
+                                        <div className="space-y-2">
+                                            {erc721Data.metadata.name && (
+                                                <div className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">Name:</span>
+                                                    <span className="text-sm text-slate-900 dark:text-white">{erc721Data.metadata.name}</span>
+                                                </div>
+                                            )}
+                                            {erc721Data.metadata.description && (
+                                                <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400 block mb-1">Description:</span>
+                                                    <span className="text-sm text-slate-900 dark:text-white">{erc721Data.metadata.description}</span>
+                                                </div>
+                                            )}
+                                            {erc721Data.metadata.external_url && (
+                                                <div className="flex justify-between p-2 bg-slate-50 dark:bg-slate-800 rounded">
+                                                    <span className="text-sm font-medium text-slate-600 dark:text-slate-400">External URL:</span>
+                                                    <a
+                                                        href={erc721Data.metadata.external_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                                    >
+                                                        <ExternalLink className="h-3 w-3 inline mr-1" />
+                                                        View
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Attributes */}
+                                        {erc721Data.metadata.attributes && erc721Data.metadata.attributes.length > 0 && (
+                                            <div className="space-y-2">
+                                                <h5 className="font-medium text-slate-900 dark:text-white">Attributes</h5>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {erc721Data.metadata.attributes.map((attr, index) => (
+                                                        <div key={index} className="p-2 bg-slate-50 dark:bg-slate-800 rounded text-center">
+                                                            <div className="text-xs text-slate-500 dark:text-slate-400">{attr.trait_type}</div>
+                                                            <div className="text-sm font-medium text-slate-900 dark:text-white">{attr.value}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Stats */}

@@ -15,10 +15,10 @@ export const NETWORKS = {
 };
 
 export const CONTRACT_ADDRESSES = {
-    TOKEN_FACTORY: (process.env.NEXT_PUBLIC_TOKEN_FACTORY_ADDRESS || '0x02197940985f5fafcf93e618571b8b961a2290eb8621c24c4c5b066c4efc2b43') as `0x${string}`,
+    TOKEN_FACTORY: (process.env.NEXT_PUBLIC_TOKEN_FACTORY_ADDRESS || '0x03e63a14c0048742873a97d8bba18de5cec7d54acf6f8a560b2afce3ae1ef534') as `0x${string}`,
     ERC20_CLASS_HASH: (process.env.NEXT_PUBLIC_ERC20_CLASS_HASH || '0x04fa600e3c3f6c5fbddf085f6260730310adb84b7118d3e6a967d4de22c1af0a') as `0x${string}`,
     ERC721_CLASS_HASH: (process.env.NEXT_PUBLIC_ERC721_CLASS_HASH || '0x0345d9a2cb150876a5a8bd0fd3ca1b5d7614d1f7f8e664a7f4aa9bed862fa7ce') as `0x${string}`,
-};
+}; // Updated TokenFactory address 2024-06-09
 
 // Log the contract addresses being used
 console.log('📋 constants: Contract addresses loaded:', {
@@ -228,6 +228,17 @@ export const TOKEN_FACTORY_ABI = [
                 "outputs": [
                     {
                         "type": "core::bool"
+                    }
+                ],
+                "state_mutability": "view"
+            },
+            {
+                "name": "get_all_tokens",
+                "type": "function",
+                "inputs": [],
+                "outputs": [
+                    {
+                        "type": "core::array::Array::<contracts::token_factory::TokenInfo>"
                     }
                 ],
                 "state_mutability": "view"

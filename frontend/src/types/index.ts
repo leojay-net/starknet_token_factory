@@ -15,12 +15,25 @@ export interface ERC20TokenData {
     totalSupply: bigint;
 }
 
+export interface NFTMetadata {
+    name?: string;
+    description?: string;
+    image?: string;
+    external_url?: string;
+    attributes?: Array<{
+        trait_type: string;
+        value: string | number;
+    }>;
+}
+
 export interface ERC721TokenData {
     address: string;
     type: 'ERC721';
     name: string;
     symbol: string;
     baseUri: string;
+    metadata?: NFTMetadata;
+    tokenUri?: string;
 }
 
 export interface TokenTransaction {

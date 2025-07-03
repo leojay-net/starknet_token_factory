@@ -216,3 +216,8 @@ export function extractTokenAddressFromReceipt(receipt: any): string | null {
     console.log('Could not extract token address from event data');
     return null;
 }
+
+export async function fetchAllTokens() {
+    const contract = getTokenFactoryContract();
+    return await contract.call('get_all_tokens', []);
+}

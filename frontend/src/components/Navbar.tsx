@@ -50,7 +50,9 @@ export function Navbar() {
 
                     {/* Wallet Connection */}
                     <div className="flex items-center space-x-4">
-                        {isConnected && address ? (
+                        {isLoading ? (
+                            <span className="text-slate-500 dark:text-slate-400 text-sm">Connecting...</span>
+                        ) : isConnected && address ? (
                             <div className="flex items-center space-x-2">
                                 <span className="text-sm text-slate-600 dark:text-slate-300 hidden sm:block">
                                     {formatAddress(address)}
@@ -71,7 +73,7 @@ export function Navbar() {
                                 disabled={isLoading}
                             >
                                 <Wallet className="w-4 h-4 mr-2" />
-                                {isLoading ? 'Connecting...' : 'Connect Wallet'}
+                                Connect Wallet
                             </Button>
                         )}
 
