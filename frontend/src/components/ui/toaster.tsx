@@ -2,17 +2,12 @@
 
 import * as React from "react"
 
-const toastVariants = {
-    default: "bg-background text-foreground",
-    destructive: "destructive group border-destructive bg-destructive text-destructive-foreground",
-}
-
 export interface Toast {
     id: string
     title?: string
     description?: string
     action?: React.ReactNode
-    variant?: keyof typeof toastVariants
+    variant?: 'default' | 'destructive'
 }
 
 const ToastContext = React.createContext<{

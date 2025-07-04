@@ -37,6 +37,9 @@ export default function CreatePage() {
 
         setIsCreating(true)
         try {
+            if (!account) {
+                throw new Error('No account available')
+            }
             const contract = getTokenFactoryContract(account)
             let result
 

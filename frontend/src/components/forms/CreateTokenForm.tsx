@@ -8,10 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/Button'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useToast } from '@/components/ui/toaster'
 import { WalletModal } from '@/components/ui/WalletModal'
 import { useTokenFactory } from '@/hooks/useTokenFactory'
-import { Coins, Palette, Loader2, Wallet } from 'lucide-react'
+import { Coins, Palette, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
 import { provider, extractTokenAddressFromReceipt } from '@/lib/starknet'
@@ -20,7 +19,6 @@ export function CreateTokenForm() {
     console.log('🏗️ CreateTokenForm: Component initializing...');
 
     const { isConnected, address } = useAccount()
-    const { addToast } = useToast()
     const { createERC20, createERC721 } = useTokenFactory()
     const [isLoading, setIsLoading] = useState(false)
     const [showWalletModal, setShowWalletModal] = useState(false)
@@ -87,8 +85,8 @@ export function CreateTokenForm() {
                 toast.error('Token created, but address not found in events.');
             }
             setErc20Form({ name: '', symbol: '', decimals: 18, initialSupply: '' });
-        } catch (error: any) {
-            toast.error(error?.message || 'Failed to create token. Please try again.');
+        } catch (error: unknown) {
+            toast.error((error as Error)?.message || 'Failed to create token. Please try again.');
         } finally {
             setIsLoading(false)
             toast.dismiss();
@@ -133,8 +131,8 @@ export function CreateTokenForm() {
                 toast.error('Token created, but address not found in events.');
             }
             setErc721Form({ name: '', symbol: '', baseUri: '' });
-        } catch (error: any) {
-            toast.error(error?.message || 'Failed to create NFT collection. Please try again.');
+        } catch (error: unknown) {
+            toast.error((error as Error)?.message || 'Failed to create NFT collection. Please try again.');
         } finally {
             setIsLoading(false)
             toast.dismiss();

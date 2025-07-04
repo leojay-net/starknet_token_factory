@@ -1,8 +1,24 @@
 import { useEffect, useState } from 'react';
 import { fetchAllTokens } from '@/lib/starknet';
 
+interface TokenData {
+  token_address: string;
+  token_type: number;
+  name: string;
+  symbol: string;
+  created_at: string;
+}
+
+interface RawTokenData {
+  name?: { data?: string[] };
+  symbol?: { data?: string[] };
+  token_address?: string | number;
+  token_type?: string | number;
+  created_at?: string | number;
+}
+
 export function useAllTokens() {
-  const [tokens, setTokens] = useState<any[]>([]);
+  const [tokens, setTokens] = useState<TokenData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -10,12 +26,12 @@ export function useAllTokens() {
     setLoading(true);
     fetchAllTokens()
       .then((result) => {
-        let tokenArray: any[] = [];
+        let tokenArray: RawTokenData[] = [];
         if (Array.isArray(result)) {
-          tokenArray = result;
+          tokenArray = result.filter((t): t is RawTokenData => typeof t === 'object' && t !== null);
         }
         // Parse and map tokens
-        const parsedTokens = tokenArray.map((token: any, index: number) => {
+        const parsedTokens = tokenArray.map((token: RawTokenData, index: number) => {
           // Decode name and symbol from ByteArray
           let name = '';
           let symbol = '';
@@ -34,7 +50,7 @@ export function useAllTokens() {
             }
             if (!name) name = `Token ${index + 1}`;
             if (!symbol) symbol = `TK${index + 1}`;
-          } catch (e) {
+          } catch {
             name = `Token ${index + 1}`;
             symbol = `TK${index + 1}`;
           }
@@ -44,7 +60,7 @@ export function useAllTokens() {
           if (!addr.startsWith('0x') && addr !== `0x${index}`) {
             try {
               addr = '0x' + BigInt(addr).toString(16);
-            } catch (e) {
+            } catch {
               addr = `0x${index}`;
             }
           }
@@ -58,7 +74,7 @@ export function useAllTokens() {
         });
         setTokens(parsedTokens);
       })
-      .catch((e) => setError(e.message))
+      .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
 

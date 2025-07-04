@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/Button'
 import { Wallet, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
+import type { Connector } from '@starknet-react/core'
 
 interface WalletModalProps {
     open: boolean
@@ -15,7 +16,7 @@ export function WalletModal({ open, onOpenChange }: WalletModalProps) {
     const { connect, connectors, isPending, error } = useConnect()
     const [isConnecting, setIsConnecting] = useState(false)
 
-    const handleConnect = async (connector: any) => {
+    const handleConnect = async (connector: Connector) => {
         try {
             setIsConnecting(true)
             await connect({ connector })
@@ -66,7 +67,7 @@ export function WalletModal({ open, onOpenChange }: WalletModalProps) {
                 <DialogHeader>
                     <DialogTitle>Connect Your Wallet</DialogTitle>
                     <DialogDescription>
-                        Choose a wallet to connect to Token Factory. If you don't have a wallet installed,
+                        Choose a wallet to connect to Token Factory. If you don&apos;t have a wallet installed,
                         you can download one by clicking the download link.
                     </DialogDescription>
                 </DialogHeader>

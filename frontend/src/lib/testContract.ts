@@ -1,9 +1,7 @@
-import { Contract, RpcProvider, CallData } from 'starknet'
+import { Contract, RpcProvider } from 'starknet'
 
 // Test contract interaction with deployed contract
 const TEST_CONTRACT_ADDRESS = '0x03e63a14c0048742873a97d8bba18de5cec7d54acf6f8a560b2afce3ae1ef534'
-const ERC20_CLASS_HASH = '0x04fa600e3c3f6c5fbddf085f6260730310adb84b7118d3e6a967d4de22c1af0a'
-const ERC721_CLASS_HASH = '0x0345d9a2cb150876a5a8bd0fd3ca1b5d7614d1f7f8e664a7f4aa9bed862fa7ce'
 
 const TOKEN_FACTORY_ABI = [
     {

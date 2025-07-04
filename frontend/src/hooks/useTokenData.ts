@@ -182,9 +182,9 @@ export function useTokenData(tokenAddress: string) {
 
                 setTokenData(tokenData);
 
-            } catch (err: any) {
+            } catch (err: unknown) {
                 console.error('Error fetching token data:', err);
-                setError(err.message || 'Failed to fetch token data');
+                setError((err as Error).message || 'Failed to fetch token data');
             } finally {
                 setLoading(false);
             }
@@ -197,7 +197,7 @@ export function useTokenData(tokenAddress: string) {
 }
 
 // Helper function to parse ByteArray from contract response
-function parseByteArray(result: any): string {
+function parseByteArray(result: unknown): string {
     try {
         console.log('Parsing ByteArray result:', result);
 
@@ -209,13 +209,13 @@ function parseByteArray(result: any): string {
 
         // Handle raw ByteArray format: [data_len, data1, data2, ..., pending_word, pending_word_len]
         if (Array.isArray(result) && result.length >= 2) {
-            const dataLen = parseInt(result[0]);
+            const dataLen = parseInt(result[0] as string);
             let fullString = '';
 
             // Extract data elements (skip first element which is length)
             for (let i = 1; i <= dataLen; i++) {
                 if (result[i] && result[i] !== '0x0') {
-                    const hexString = result[i].replace('0x', '');
+                    const hexString = (result[i] as string).replace('0x', '');
                     const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
                     fullString += decodedPart;
                 }
@@ -225,10 +225,10 @@ function parseByteArray(result: any): string {
             const pendingWordIndex = dataLen + 1;
             const pendingWordLenIndex = result.length - 1;
 
-            if (result[pendingWordLenIndex] && parseInt(result[pendingWordLenIndex]) > 0) {
-                const pendingWordLen = parseInt(result[pendingWordLenIndex]);
+            if (result[pendingWordLenIndex] && parseInt(result[pendingWordLenIndex] as string) > 0) {
+                const pendingWordLen = parseInt(result[pendingWordLenIndex] as string);
                 if (result[pendingWordIndex] && result[pendingWordIndex] !== '0x0') {
-                    const pendingHex = result[pendingWordIndex].replace('0x', '');
+                    const pendingHex = (result[pendingWordIndex] as string).replace('0x', '');
                     // Only take the specified number of bytes from the pending word
                     const pendingBytes = pendingHex.slice(0, pendingWordLen * 2); // 2 hex chars per byte
                     if (pendingBytes) {
@@ -243,11 +243,12 @@ function parseByteArray(result: any): string {
         }
 
         // Handle structured ByteArray format: { data: [...], pending_word: ..., pending_word_len: ... }
-        if (result?.data && Array.isArray(result.data)) {
+        if (result && typeof result === 'object' && 'data' in result && Array.isArray((result as { data: unknown[] }).data)) {
+            const resultObj = result as { data: string[]; pending_word?: string; pending_word_len?: string };
             let fullString = '';
 
             // Concatenate all data elements to handle long strings
-            for (const element of result.data) {
+            for (const element of resultObj.data) {
                 if (element && element !== '0x0') {
                     const hexString = element.replace('0x', '');
                     const decodedPart = Buffer.from(hexString, 'hex').toString('utf8').replace(/\0/g, '');
@@ -256,9 +257,9 @@ function parseByteArray(result: any): string {
             }
 
             // Handle pending word if it exists and has content
-            if (result.pending_word && result.pending_word !== '0x0' && result.pending_word_len && parseInt(result.pending_word_len) > 0) {
-                const pendingHex = result.pending_word.replace('0x', '');
-                const pendingLength = parseInt(result.pending_word_len);
+            if (resultObj.pending_word && resultObj.pending_word !== '0x0' && resultObj.pending_word_len && parseInt(resultObj.pending_word_len) > 0) {
+                const pendingHex = resultObj.pending_word.replace('0x', '');
+                const pendingLength = parseInt(resultObj.pending_word_len);
 
                 // Only take the specified number of bytes from the pending word
                 const pendingBytes = pendingHex.slice(0, pendingLength * 2); // 2 hex chars per byte

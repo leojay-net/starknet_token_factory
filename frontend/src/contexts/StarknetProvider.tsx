@@ -14,7 +14,7 @@ const connectors = [
     new InjectedConnector({ options: { id: 'braavos' } }),
 ]
 
-function provider(chain: any) {
+function provider(chain: { rpcUrls?: { default?: { http?: readonly string[] } } }) {
     return new RpcProvider({
         nodeUrl: chain.rpcUrls?.default?.http?.[0] || 'https://starknet-sepolia.public.blastapi.io'
     })
@@ -26,7 +26,7 @@ export function StarknetProvider({ children }: { children: React.ReactNode }) {
             chains={chains}
             provider={provider}
             connectors={connectors}
-            
+
         >
             {children}
         </StarknetConfig>

@@ -1,4 +1,4 @@
-import { Contract, RpcProvider, Account, CallData, constants } from 'starknet';
+import { Contract, RpcProvider, Account, constants } from 'starknet';
 import { CONTRACT_ADDRESSES, NETWORKS, DEFAULT_NETWORK, TOKEN_FACTORY_ABI, ERC20_ABI, ERC721_ABI } from './constants';
 
 // Contract configuration
@@ -20,16 +20,16 @@ export const provider = new RpcProvider({
 console.log('✅ starknet: Provider created successfully');
 
 
-export function getTokenFactoryContract(account?: Account) {
+export function getTokenFactoryContract(account?: Account | unknown) {
     console.log('🏭 starknet: getTokenFactoryContract called with:', {
         hasAccount: !!account,
-        accountAddress: account?.address,
+        accountAddress: (account as Account)?.address,
         tokenFactoryAddress: TOKEN_FACTORY_ADDRESS,
         rpcUrl: RPC_URL,
         hasProvider: !!provider
     });
 
-    const contract = new Contract(TOKEN_FACTORY_ABI, TOKEN_FACTORY_ADDRESS, account || provider);
+    const contract = new Contract(TOKEN_FACTORY_ABI, TOKEN_FACTORY_ADDRESS, (account as Account) || provider);
 
     console.log('✅ starknet: Contract created:', {
         contractAddress: contract.address,
@@ -40,22 +40,22 @@ export function getTokenFactoryContract(account?: Account) {
     return contract;
 }
 
-export function getERC20Contract(tokenAddress: string, account?: Account) {
+export function getERC20Contract(tokenAddress: string, account?: Account | unknown) {
     const provider = new RpcProvider({
         nodeUrl: process.env.NEXT_PUBLIC_SEPOLIA_RPC || "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/kwgGr9GGk4YyLXuGfEvpITv1jpvn3PgP",
         chainId: constants.StarknetChainId.SN_SEPOLIA,
     });
 
-    return new Contract(ERC20_ABI, tokenAddress, account || provider);
+    return new Contract(ERC20_ABI, tokenAddress, (account as Account) || provider);
 }
 
-export function getERC721Contract(tokenAddress: string, account?: Account) {
+export function getERC721Contract(tokenAddress: string, account?: Account | unknown) {
     const provider = new RpcProvider({
         nodeUrl: process.env.NEXT_PUBLIC_SEPOLIA_RPC || "https://starknet-sepolia.g.alchemy.com/starknet/version/rpc/v0_8/kwgGr9GGk4YyLXuGfEvpITv1jpvn3PgP",
         chainId: constants.StarknetChainId.SN_SEPOLIA,
     });
 
-    return new Contract(ERC721_ABI, tokenAddress, account || provider);
+    return new Contract(ERC721_ABI, tokenAddress, (account as Account) || provider);
 }
 
 export function stringToFelt252(str: string): string {
@@ -67,12 +67,13 @@ export function felt252ToString(felt: string | bigint): string {
     return Buffer.from(hex, 'hex').toString('utf8').replace(/\0/g, '');
 }
 
-export function u256ToBigInt(u256: any): bigint {
+export function u256ToBigInt(u256: unknown): bigint {
     if (typeof u256 === 'bigint') return u256;
-    if (typeof u256 === 'object' && u256.low !== undefined && u256.high !== undefined) {
-        return (BigInt(u256.high) << BigInt(128)) + BigInt(u256.low);
+    if (typeof u256 === 'object' && u256 && 'low' in u256 && 'high' in u256) {
+        const u256Obj = u256 as { low: string | number; high: string | number };
+        return (BigInt(u256Obj.high) << BigInt(128)) + BigInt(u256Obj.low);
     }
-    return BigInt(u256);
+    return BigInt(u256 as string | number);
 }
 
 export interface TokenInfo {
@@ -201,62 +202,54 @@ export function bigIntToU256(value: bigint) {
     };
 }
 
-/**
- * Extracts the token address from a TokenCreated event in a Starknet transaction receipt.
- * @param receipt The transaction receipt object from provider.getTransactionReceipt
- * @returns The token address as a string, or null if not found
- */
-export function extractTokenAddressFromReceipt(receipt: any): string | null {
-    if (!receipt?.events) {
-        console.log('No events in receipt:', receipt);
+// Utility to extract token address from transaction receipt
+export function extractTokenAddressFromReceipt(receipt: unknown): string | null {
+    console.log('🔍 extractTokenAddressFromReceipt: Analyzing receipt:', receipt);
+
+    if (!receipt || typeof receipt !== 'object') {
+        console.log('❌ extractTokenAddressFromReceipt: Invalid receipt format');
         return null;
     }
 
-    console.log('Receipt events:', receipt.events);
+    const receiptObj = receipt as { events?: unknown[] };
+    if (!receiptObj.events || !Array.isArray(receiptObj.events)) {
+        console.log('❌ extractTokenAddressFromReceipt: No events array found');
+        return null;
+    }
 
-    // Look for TokenCreated event
-    const event = receipt.events.find((e: any) => {
-        // Check if event name matches TokenCreated
-        if (e.name && e.name === 'TokenCreated') return true;
+    console.log('🔍 extractTokenAddressFromReceipt: Found events:', receiptObj.events.length);
 
-        // Check if any key contains TokenCreated hash
-        if (e.keys && Array.isArray(e.keys)) {
-            // The event selector for TokenCreated might be the first key
-            return e.keys.some((k: string) =>
-                k.toLowerCase().includes('tokencreated') ||
-                // Add potential event selector hash for TokenCreated
-                k === '0x2db2b0215b8e7c3f9ed2d3a9b5c8e6f4a7d9b3c1e5f8a2d4c7b0e3f6a9c2d5e8'
-            );
+    for (const event of receiptObj.events) {
+        if (!event || typeof event !== 'object') continue;
+
+        const eventObj = event as { name?: string; data?: unknown[] };
+        console.log('🔍 extractTokenAddressFromReceipt: Processing event:', eventObj.name);
+
+        if (eventObj.name === 'TokenCreated' && eventObj.data && Array.isArray(eventObj.data) && eventObj.data.length > 0) {
+            const tokenAddress = eventObj.data[0];
+            console.log('✅ extractTokenAddressFromReceipt: Found TokenCreated event with address:', tokenAddress);
+            return String(tokenAddress);
         }
-
-        return false;
-    });
-
-    if (!event) {
-        console.log('TokenCreated event not found in events');
-        return null;
     }
 
-    console.log('Found TokenCreated event:', event);
-
-    // Extract token address from event data
-    if (event.data && Array.isArray(event.data) && event.data.length >= 2) {
-        // Typically: [creator_address, token_address, token_type, ...]
-        const tokenAddress = event.data[1];
-        console.log('Extracted token address:', tokenAddress);
-        return tokenAddress;
-    }
-
-    // If using named fields (some providers might structure it differently)
-    if (event.token_address) {
-        return event.token_address;
-    }
-
-    console.log('Could not extract token address from event data');
+    console.log('❌ extractTokenAddressFromReceipt: No TokenCreated event found');
     return null;
 }
 
+// Function to fetch all tokens from the factory
 export async function fetchAllTokens() {
-    const contract = getTokenFactoryContract();
-    return await contract.call('get_all_tokens', []);
+    try {
+        console.log('🌐 fetchAllTokens: Starting fetch...');
+        const contract = getTokenFactoryContract();
+        
+        // Use the get_all_tokens function which returns all tokens created by the factory
+        const result = await contract.call('get_all_tokens', []);
+        console.log('🌐 fetchAllTokens: All tokens result:', result);
+        
+        return result;
+        
+    } catch (error) {
+        console.error('❌ fetchAllTokens: Error:', error);
+        throw error;
+    }
 }

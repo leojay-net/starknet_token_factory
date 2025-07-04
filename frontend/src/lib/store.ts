@@ -21,11 +21,11 @@ interface TokenStore {
     setLoading: (loading: boolean) => void
 
     // Async actions
-    fetchUserData: (address: string) => Promise<void>
+    fetchUserData: () => Promise<void>
     fetchGlobalData: () => Promise<void>
 }
 
-export const useTokenStore = create<TokenStore>((set, get) => ({
+export const useTokenStore = create<TokenStore>((set) => ({
     // Initial state
     userTokens: [],
     userStats: {
@@ -52,7 +52,7 @@ export const useTokenStore = create<TokenStore>((set, get) => ({
     setLoading: (loading) => set({ loading }),
 
     // Async actions
-    fetchUserData: async (address: string) => {
+    fetchUserData: async () => {
         set({ loading: true })
         try {
             // Real data will be fetched via useUserTokens hook

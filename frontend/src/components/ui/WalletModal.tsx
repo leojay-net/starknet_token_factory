@@ -17,21 +17,6 @@ interface WalletModalProps {
     onClose: () => void
 }
 
-const walletInfo = {
-    argent: {
-        name: 'Argent X',
-        icon: '🔶'
-    },
-    braavos: {
-        name: 'Braavos',
-        icon: '🛡️'
-    },
-    'wallet-connect': {
-        name: 'WalletConnect',
-        icon: '🔗'
-    }
-}
-
 export function WalletModal({ isOpen, onClose }: WalletModalProps) {
     const { connect, isConnected, isLoading } = useWallet();
     const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'success' | 'error'>('idle');
@@ -58,9 +43,9 @@ export function WalletModal({ isOpen, onClose }: WalletModalProps) {
         setError(null);
         try {
             await connect();
-        } catch (err: any) {
+        } catch (err: unknown) {
             setConnectionStatus('error');
-            setError(err?.message || 'Failed to connect wallet. Please try again.');
+            setError((err as Error)?.message || 'Failed to connect wallet. Please try again.');
         }
     };
 

@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useWallet } from '@/contexts/WalletContext'
 import { useUserTokens } from '@/hooks/useUserTokens'
-import { useGlobalTokens } from '@/hooks/useGlobalTokens'
 import { getTokenFactoryContract } from '@/lib/starknet'
 import { Button } from '@/components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
@@ -19,8 +18,7 @@ export function ContractDebugger() {
     const [error, setError] = useState<string | null>(null)
 
     const { address } = useWallet()
-    const { userTokens, userStats, refresh: refreshUserTokens } = useUserTokens()
-    const { allTokens, globalStats, refresh: refreshGlobalTokens } = useGlobalTokens()
+    const { userTokens, refresh: refreshUserTokens } = useUserTokens()
 
     const testTotalTokens = async () => {
         setLoading(true)

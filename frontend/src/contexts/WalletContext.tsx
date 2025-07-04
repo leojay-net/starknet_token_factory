@@ -1,17 +1,13 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { constants, RpcProvider, AccountInterface } from 'starknet';
+import { constants, RpcProvider } from 'starknet';
 
 // Avoid SSR issues
-type SessionAccountInterface = any;
-type StarknetWindowObject = any;
-type ConnectedStarknetWindowObject = any;
+type SessionAccountInterface = unknown;
 
 // Import browser-only modules
-let getStarknet: any = null;
-
-const TOKEN_FACTORY_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_FACTORY_ADDRESS || "0x03e63a14c0048742873a97d8bba18de5cec7d54acf6f8a560b2afce3ae1ef534";
+let getStarknet: unknown = null;
 
 interface WalletContextType {
     isLoading: boolean;
@@ -30,7 +26,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const [isConnected, setIsConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isClient, setIsClient] = useState(false);
-    const [isInitialized, setIsInitialized] = useState(false);
 
     // Initialize client-side only modules
     useEffect(() => {
@@ -39,19 +34,19 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         const initStarknet = async () => {
             try {
                 setIsLoading(true);
-                if (typeof window !== 'undefined' && (window as any).starknet) {
-                    getStarknet = (window as any).starknet;
+                if (typeof window !== 'undefined' && (window as { starknet?: unknown }).starknet) {
+                    getStarknet = (window as { starknet?: unknown }).starknet;
                     const wasConnected = localStorage.getItem('wallet_connected') === 'true';
                     if (wasConnected) {
                         // Always call enable to restore session
                         try {
-                            await getStarknet.enable({ starknetVersion: "v5" });
-                            if (getStarknet.account && getStarknet.account.address) {
-                                setAccount(getStarknet.account);
-                                setAddress(getStarknet.account.address);
+                            await (getStarknet as { enable: (options: { starknetVersion: string }) => Promise<unknown> }).enable({ starknetVersion: "v5" });
+                            if ((getStarknet as { account?: { address?: string } }).account && (getStarknet as { account?: { address?: string } }).account?.address) {
+                                setAccount((getStarknet as { account: unknown }).account);
+                                setAddress((getStarknet as { account: { address: string } }).account.address);
                                 setIsConnected(true);
                             }
-                        } catch (err) {
+                        } catch {
                             // If enable fails, clear the flag
                             localStorage.removeItem('wallet_connected');
                             setIsConnected(false);
@@ -63,7 +58,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             } catch (error) {
                 console.error("Failed to initialize Starknet:", error);
             } finally {
-                setIsInitialized(true);
                 setIsLoading(false);
             }
         };
@@ -71,7 +65,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         // Set a timeout to ensure loading doesn't get stuck
         const timeout = setTimeout(() => {
             console.warn('Wallet initialization timeout - forcing loading to false');
-            setIsInitialized(true);
             setIsLoading(false);
         }, 10000);
 
@@ -93,27 +86,6 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         })
         : null;
 
-    const tryConnect = async () => {
-        if (!getStarknet || !isInitialized) return;
-
-        try {
-            // Check if wallet is already connected
-            if (getStarknet.isConnected) {
-                const account = getStarknet.account;
-                if (account && account.address) {
-                    console.log('Auto-connecting to:', account.address);
-                    setAccount(account);
-                    setAddress(account.address);
-                    setIsConnected(true);
-                    localStorage.setItem('wallet_connected', 'true');
-                }
-            }
-        } catch (error) {
-            console.error('Auto-connect failed:', error);
-            localStorage.removeItem('wallet_connected');
-        }
-    };
-
     const connectWallet = async () => {
         if (!getStarknet || !provider) {
             alert("Please install ArgentX or Braavos wallet extension first!");
@@ -123,20 +95,20 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(true);
         try {
             // Request connection to the wallet
-            const result = await getStarknet.enable({ starknetVersion: "v5" });
+            const result = await (getStarknet as { enable: (options: { starknetVersion: string }) => Promise<unknown> }).enable({ starknetVersion: "v5" });
 
-            if (result && result.length > 0) {
-                const account = getStarknet.account;
+            if (result && Array.isArray(result) && result.length > 0) {
+                const account = (getStarknet as { account: unknown }).account;
 
                 // Ensure the account is properly configured with the provider
-                if (account && account.address) {
+                if (account && (account as { address?: string }).address) {
                     console.log('Wallet connected:', {
-                        address: account.address,
-                        chainId: await account.getChainId?.() || 'unknown'
+                        address: (account as { address: string }).address,
+                        chainId: await (account as { getChainId?: () => Promise<string> }).getChainId?.() || 'unknown'
                     });
 
                     setAccount(account);
-                    setAddress(account.address);
+                    setAddress((account as { address: string }).address);
                     setIsConnected(true);
                     localStorage.setItem('wallet_connected', 'true');
                 } else {

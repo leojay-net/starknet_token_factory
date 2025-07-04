@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getTokenFactoryContract } from '@/lib/starknet';
 import { useWallet } from '@/contexts/WalletContext';
 
@@ -18,6 +18,14 @@ interface GlobalStats {
     active_users: number;
 }
 
+interface RawTokenData {
+    name?: { data?: string[] };
+    symbol?: { data?: string[] };
+    token_address?: string | number;
+    token_type?: string | number;
+    created_at?: string | number;
+}
+
 export function useGlobalTokens() {
     const { address } = useWallet();
     const [allTokens, setAllTokens] = useState<TokenInfo[]>([]);
@@ -25,11 +33,7 @@ export function useGlobalTokens() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        fetchGlobalTokens();
-    }, [address]);
-
-    const fetchGlobalTokens = async () => {
+    const fetchGlobalTokens = useCallback(async () => {
         setLoading(true);
         setError(null);
 
@@ -50,7 +54,7 @@ export function useGlobalTokens() {
                     console.log('User tokens:', userTokensRaw);
 
                     if (Array.isArray(userTokensRaw)) {
-                        allUserTokens = userTokensRaw.map((token: any) => {
+                        allUserTokens = userTokensRaw.map((token: RawTokenData) => {
                             console.log('Processing token:', token);
 
                             // Handle ByteArray name and symbol
@@ -75,8 +79,9 @@ export function useGlobalTokens() {
                                 symbol = 'UNK';
                             }
 
-                            // Ensure token address is in hex format
+                            // Ensure token address is in hex format and string
                             let tokenAddress = token.token_address || '';
+                            tokenAddress = String(tokenAddress);
                             if (tokenAddress && !tokenAddress.startsWith('0x')) {
                                 tokenAddress = '0x' + BigInt(tokenAddress).toString(16);
                             }
@@ -108,13 +113,17 @@ export function useGlobalTokens() {
             console.log('Calculated stats:', stats);
             setGlobalStats(stats);
 
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Error fetching global tokens:', err);
-            setError(err.message || 'Failed to fetch global tokens');
+            setError((err as Error).message || 'Failed to fetch global tokens');
         } finally {
             setLoading(false);
         }
-    };
+    }, [address]);
+
+    useEffect(() => {
+        fetchGlobalTokens();
+    }, [fetchGlobalTokens]);
 
     const refresh = () => {
         fetchGlobalTokens();

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import Image from 'next/image'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import {
@@ -537,7 +538,7 @@ export default function TokenPage() {
             addToast({ title: 'Success', description: 'NFT transferred!' });
             setShowTransferModal(false);
             fetchNftCollection();
-        } catch (error) {
+        } catch {
             addToast({ title: 'Error', description: 'Transfer failed', variant: 'destructive' });
         } finally {
             setIsTransferring(false);
@@ -566,7 +567,7 @@ export default function TokenPage() {
             setShowErc20MintModal(false)
             setErc20MintRecipient(address || '')
             setErc20MintAmount('')
-        } catch (error) {
+        } catch {
             addToast({ title: 'Error', description: 'Mint failed. Are you the owner?', variant: 'destructive' })
         } finally {
             setIsErc20Minting(false)
@@ -595,7 +596,7 @@ export default function TokenPage() {
             setShowErc20TransferModal(false)
             setErc20TransferRecipient('')
             setErc20TransferAmount('')
-        } catch (error) {
+        } catch {
             addToast({ title: 'Error', description: 'Transfer failed.', variant: 'destructive' })
         } finally {
             setIsErc20Transferring(false)
@@ -878,7 +879,7 @@ export default function TokenPage() {
                                                 {/* NFT Image */}
                                                 <div className="aspect-square bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 relative overflow-hidden">
                                                     {nft.metadata?.image ? (
-                                                        <img
+                                                        <Image
                                                             src={nft.metadata.image.includes('gateway.pinata.cloud') ?
                                                                 nft.metadata.image :
                                                                 nft.metadata.image.startsWith('ipfs://') ?
@@ -886,10 +887,10 @@ export default function TokenPage() {
                                                                     nft.metadata.image
                                                             }
                                                             alt={nft.metadata?.name || `NFT #${nft.tokenId}`}
-                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                                            onError={(e) => {
-                                                                const target = e.target as HTMLImageElement;
-                                                                target.style.display = 'none';
+                                                            fill
+                                                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                                            onError={() => {
+                                                                // Handle error by hiding the image
                                                             }}
                                                         />
                                                     ) : (
@@ -929,7 +930,7 @@ export default function TokenPage() {
                                                     {nft.metadata?.attributes && nft.metadata.attributes.length > 0 && (
                                                         <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
                                                             <div className="flex flex-wrap gap-1">
-                                                                {nft.metadata.attributes.slice(0, 2).map((attr: any, index: number) => (
+                                                                {nft.metadata.attributes.slice(0, 2).map((attr: { trait_type: string; value: string }, index: number) => (
                                                                     <div
                                                                         key={index}
                                                                         className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-xs"
@@ -1222,11 +1223,14 @@ export default function TokenPage() {
                                                     ✅ Image uploaded successfully!
                                                 </p>
                                                 <div className="bg-white dark:bg-slate-800 rounded-xl p-3 border border-green-200 dark:border-green-700">
-                                                    <img
-                                                        src={nftImageUrl}
-                                                        alt="NFT Preview"
-                                                        className="w-full h-auto rounded-lg max-h-64 object-contain"
-                                                    />
+                                                    <div className="relative w-full h-64">
+                                                        <Image
+                                                            src={nftImageUrl}
+                                                            alt="NFT Preview"
+                                                            fill
+                                                            className="rounded-lg object-contain"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
