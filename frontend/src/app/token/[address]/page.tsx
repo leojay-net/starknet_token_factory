@@ -850,7 +850,7 @@ export default function TokenPage() {
                                     </div>
                                 ) : nftCollection.length === 0 ? (
                                     <div className="text-center py-12">
-                                        <div className="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600">
+                                        <div className="w-24 h-24 mx-auto mb-6 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600">
                                             <ImageIcon className="h-10 w-10 text-slate-400 dark:text-slate-500" />
                                         </div>
                                         <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
@@ -862,7 +862,7 @@ export default function TokenPage() {
                                         {isConnected && (
                                             <Button
                                                 onClick={() => setShowMintModal(true)}
-                                                className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                                                className="bg-[var(--stark-orange)] hover:bg-yellow-400"
                                             >
                                                 <Plus className="h-4 w-4 mr-2" />
                                                 Mint First NFT
@@ -877,7 +877,7 @@ export default function TokenPage() {
                                                 className="group relative bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden hover:shadow-xl hover:shadow-blue-500/10 transition-all duration-300 hover:-translate-y-1"
                                             >
                                                 {/* NFT Image */}
-                                                <div className="aspect-square bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800 relative overflow-hidden">
+                                                <div className="aspect-square bg-white dark:bg-slate-800 relative overflow-hidden">
                                                     {nft.metadata?.image ? (
                                                         <Image
                                                             src={nft.metadata.image.includes('gateway.pinata.cloud') ?
@@ -972,11 +972,11 @@ export default function TokenPage() {
                             <CardHeader>
                                 <CardTitle className="flex items-center justify-between">
                                     <div className="flex items-center space-x-3">
-                                        <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                                        <div className="w-10 h-10 bg-[var(--stark-orange)] rounded-xl flex items-center justify-center">
                                             <Plus className="h-5 w-5 text-white" />
                                         </div>
                                         <div>
-                                            <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                            <span className="text-xl font-bold text-[var(--stark-orange)]">
                                                 Mint NFT
                                             </span>
                                             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
@@ -986,7 +986,7 @@ export default function TokenPage() {
                                     </div>
                                     <Button
                                         onClick={() => setShowMintModal(true)}
-                                        className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200"
+                                        className="bg-[var(--stark-orange)] hover:bg-yellow-400 shadow-lg hover:shadow-xl transition-all duration-200"
                                         size="lg"
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
@@ -1029,17 +1029,16 @@ export default function TokenPage() {
 
                     {/* Collection Stats for NFTs */}
                     {!isERC20 && (
-                        <Card className="relative overflow-hidden border-0 shadow-lg bg-gradient-to-br from-purple-50 to-pink-100 dark:from-purple-900/20 dark:to-pink-900/30">
-                            <div className="absolute inset-0 bg-gradient-to-r from-purple-600/10 to-pink-600/10"></div>
+                        <Card className="relative overflow-hidden border-0 shadow-lg bg-white dark:bg-slate-800">
                             <CardContent className="p-6 relative">
                                 <div className="text-center">
-                                    <div className="flex items-center justify-center w-12 h-12 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl mx-auto mb-4">
+                                    <div className="flex items-center justify-center w-12 h-12 bg-[var(--stark-orange)] rounded-xl mx-auto mb-4">
                                         <ImageIcon className="h-6 w-6 text-white" />
                                     </div>
                                     <h3 className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-2 uppercase tracking-wider">
                                         Collection Size
                                     </h3>
-                                    <p className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                                    <p className="text-3xl font-bold text-[var(--stark-orange)]">
                                         {nftCollection.length}
                                     </p>
                                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -1052,10 +1051,10 @@ export default function TokenPage() {
 
                     {/* Quick Actions */}
                     {!isERC20 && isConnected && (
-                        <Card className="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors bg-slate-50/50 dark:bg-slate-800/50">
+                        <Card className="border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
                             <CardContent className="p-6">
                                 <div className="text-center">
-                                    <div className="w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+                                    <div className="w-12 h-12 bg-[var(--stark-orange)] rounded-xl flex items-center justify-center mx-auto mb-4">
                                         <Plus className="h-6 w-6 text-white" />
                                     </div>
                                     <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
@@ -1066,7 +1065,7 @@ export default function TokenPage() {
                                     </p>
                                     <Button
                                         onClick={() => setShowMintModal(true)}
-                                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                                        className="w-full bg-[var(--stark-orange)] hover:bg-yellow-400"
                                         size="sm"
                                     >
                                         <Plus className="h-4 w-4 mr-2" />
@@ -1084,10 +1083,10 @@ export default function TokenPage() {
                 <DialogContent className="max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+                            <div className="w-10 h-10 bg-[var(--stark-orange)] rounded-xl flex items-center justify-center">
                                 <Palette className="h-5 w-5 text-white" />
                             </div>
-                            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                            <span className="text-2xl font-bold text-[var(--stark-orange)]">
                                 Mint NFT
                             </span>
                         </DialogTitle>
@@ -1095,8 +1094,8 @@ export default function TokenPage() {
 
                     <div className="space-y-8">
                         {/* Form Header */}
-                        <div className="text-center py-6 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl border border-blue-100 dark:border-blue-800">
-                            <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <div className="text-center py-6 bg-white dark:bg-slate-800 rounded-2xl border border-orange-100 dark:border-orange-800">
+                            <div className="w-16 h-16 bg-[var(--stark-orange)] rounded-2xl flex items-center justify-center mx-auto mb-4">
                                 <Palette className="h-8 w-8 text-white" />
                             </div>
                             <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
@@ -1120,7 +1119,7 @@ export default function TokenPage() {
                                         value={mintFormData.name}
                                         onChange={(e) => setMintFormData(prev => ({ ...prev, name: e.target.value }))}
                                         placeholder="e.g., Cosmic Dragon #001"
-                                        className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-medium"
+                                        className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors font-medium"
                                         required
                                     />
                                 </div>
@@ -1133,7 +1132,7 @@ export default function TokenPage() {
                                         value={mintFormData.recipient}
                                         onChange={(e) => setMintFormData(prev => ({ ...prev, recipient: e.target.value }))}
                                         placeholder="0x..."
-                                        className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors font-mono text-sm"
+                                        className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors font-mono text-sm"
                                         required
                                     />
                                 </div>
@@ -1149,7 +1148,7 @@ export default function TokenPage() {
                                     onChange={(e) => setMintFormData(prev => ({ ...prev, description: e.target.value }))}
                                     placeholder="Describe what makes this NFT special..."
                                     rows={4}
-                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none"
+                                    className="w-full px-4 py-4 rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-500 focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors resize-none"
                                     required
                                 />
                             </div>
@@ -1170,9 +1169,9 @@ export default function TokenPage() {
                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                         required
                                     />
-                                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-blue-400 dark:hover:border-blue-500 transition-colors bg-slate-50 dark:bg-slate-800/50">
-                                        <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-purple-100 dark:from-blue-900 dark:to-purple-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                                            <ImageIcon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-xl p-8 text-center hover:border-orange-400 dark:hover:border-orange-500 transition-colors bg-slate-50 dark:bg-slate-800/50">
+                                        <div className="w-16 h-16 bg-gradient-to-r from-orange-100 to-yellow-100 dark:from-orange-900 dark:to-yellow-900 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                            <ImageIcon className="h-8 w-8 text-orange-600 dark:text-orange-400" />
                                         </div>
                                         <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
                                             Choose your NFT image
@@ -1188,24 +1187,24 @@ export default function TokenPage() {
 
                                 {/* Upload Status */}
                                 {uploadingImage && (
-                                    <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-xl border border-blue-200 dark:border-blue-700">
+                                    <div className="p-4 bg-gradient-to-r from-orange-50 to-orange-100 dark:from-orange-900/30 dark:to-orange-800/30 rounded-xl border border-orange-200 dark:border-orange-700">
                                         <div className="flex items-center space-x-3">
-                                            <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                            <Loader2 className="w-5 h-5 animate-spin text-orange-600" />
                                             <div>
-                                                <p className="font-medium text-blue-900 dark:text-blue-100">Uploading to IPFS...</p>
-                                                <p className="text-sm text-blue-700 dark:text-blue-300">This may take a few moments</p>
+                                                <p className="font-medium text-orange-900 dark:text-orange-100">Uploading to IPFS...</p>
+                                                <p className="text-sm text-orange-700 dark:text-orange-300">This may take a few moments</p>
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
                                 {uploadingMetadata && (
-                                    <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30 rounded-xl border border-purple-200 dark:border-purple-700">
+                                    <div className="p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/30 dark:to-yellow-800/30 rounded-xl border border-yellow-200 dark:border-yellow-700">
                                         <div className="flex items-center space-x-3">
-                                            <Loader2 className="w-5 h-5 animate-spin text-purple-600" />
+                                            <Loader2 className="w-5 h-5 animate-spin text-yellow-600" />
                                             <div>
-                                                <p className="font-medium text-purple-900 dark:text-purple-100">Creating metadata...</p>
-                                                <p className="text-sm text-purple-700 dark:text-purple-300">Preparing your NFT data</p>
+                                                <p className="font-medium text-yellow-900 dark:text-yellow-100">Creating metadata...</p>
+                                                <p className="text-sm text-yellow-700 dark:text-yellow-300">Preparing your NFT data</p>
                                             </div>
                                         </div>
                                     </div>
@@ -1243,7 +1242,7 @@ export default function TokenPage() {
                                 <Button
                                     onClick={handleMintNFT}
                                     disabled={isMinting || uploadingImage || uploadingMetadata || !nftImageUrl}
-                                    className="flex-1 h-14 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-semibold"
+                                    className="flex-1 h-14 bg-gradient-to-r from-orange-400 to-yellow-400 hover:from-orange-500 hover:to-yellow-500 shadow-lg hover:shadow-xl transition-all duration-200 text-lg font-semibold"
                                     size="lg"
                                 >
                                     {isMinting ? (

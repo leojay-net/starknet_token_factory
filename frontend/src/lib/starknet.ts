@@ -241,13 +241,13 @@ export async function fetchAllTokens() {
     try {
         console.log('🌐 fetchAllTokens: Starting fetch...');
         const contract = getTokenFactoryContract();
-        
+
         // Use the get_all_tokens function which returns all tokens created by the factory
         const result = await contract.call('get_all_tokens', []);
         console.log('🌐 fetchAllTokens: All tokens result:', result);
-        
+
         return result;
-        
+
     } catch (error) {
         console.error('❌ fetchAllTokens: Error:', error);
         throw error;
